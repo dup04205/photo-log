@@ -27,7 +27,7 @@
 2. Actions 탭 → 최근 실행 → Artifacts의 `photo-log-apk`를 내려받아 압축을 푼다.
 3. 폰에서 `app-release.apk`를 열어 설치한다(출처를 알 수 없는 앱 허용 필요).
 
-서명 키는 저장소에 없다. GitHub Secrets의 `SIGNING_KEYSTORE_B64`(키 파일 base64)와 `SIGNING_PASSWORD`로 빌드할 때마다 같은 키로 서명하므로, 새 빌드를 앱 삭제 없이 덮어 설치할 수 있다. 저장소를 포크해 직접 빌드하려면 자신의 키를 같은 이름의 Secrets로 등록한다.
+서명 키는 저장소에 없다. GitHub Secrets의 `SIGNING_KEYSTORE_B64`(키 파일 base64, 길면 앞부분과 뒷부분을 `SIGNING_KEYSTORE_B64`·`SIGNING_KEYSTORE_B64_2`로 나눠 등록 가능)와 `SIGNING_PASSWORD`로 빌드할 때마다 같은 키로 서명하므로, 새 빌드를 앱 삭제 없이 덮어 설치할 수 있다. 저장소를 포크해 직접 빌드하려면 자신의 키를 같은 이름의 Secrets로 등록한다.
 
 ## 처음 실행 시 권한
 - 사진 위치 정보 접근: 사진 속 위치를 지우지 않고 읽기
