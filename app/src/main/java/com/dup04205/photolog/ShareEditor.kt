@@ -192,7 +192,7 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                                         fontFamily = NoteFont,
                                         fontSize = (w.value * 0.035f).sp,
                                         lineHeight = (w.value * 0.035f * 1.4f).sp,
-                                        maxLines = 4,
+                                        maxLines = ShareImage.MAX_NOTE_LINES,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }

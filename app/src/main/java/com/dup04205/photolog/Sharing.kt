@@ -66,6 +66,28 @@ object Sharing {
 
 /** 공유 이미지: 고른 비율로 자른 사진 + (선택) 기록 글 + (선택) 필름카메라 날짜. 가로 1080px. */
 object ShareImage {
+    /** 기록은 공유 이미지 기준 최대 5줄까지 */
+    const val MAX_NOTE_LINES = 5
+    private const val W = 1080
+
+    private fun notePaint() = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        textSize = W * 0.035f
+    }
+
+    private fun noteLayout(text: String, maxLines: Int = Int.MAX_VALUE): StaticLayout {
+        val pad = W * 0.05f
+        return StaticLayout.Builder
+            .obtain(text, 0, text.length, notePaint(), (W - 2 * pad).toInt())
+            .setLineSpacing(W * 0.014f, 1f)
+            .setMaxLines(maxLines)
+            .setEllipsize(TextUtils.TruncateAt.END)
+            .build()
+    }
+
+    /** 공유 이미지에 넣었을 때 몇 줄이 되는지(엔터 줄 + 자동 줄바꿈). */
+    fun noteLineCount(text: String): Int = if (text.isEmpty()) 0 else noteLayout(text).lineCount
+
     fun render(
         ctx: Context,
         src: Bitmap,
@@ -76,7 +98,7 @@ object ShareImage {
         stamp: Boolean,
     ): Uri? {
         return try {
-            val w = 1080
+            val w = W
             val h = (w / ratio).roundToInt()
             val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             val c = Canvas(out)
@@ -90,16 +112,7 @@ object ShareImage {
             var bottom = h.toFloat()
             if (overlayNote.isNotBlank()) {
                 val pad = w * 0.05f
-                val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = 0xFFFFFFFF.toInt()
-                    textSize = w * 0.035f
-                }
-                val layout = StaticLayout.Builder
-                    .obtain(overlayNote, 0, overlayNote.length, tp, (w - 2 * pad).toInt())
-                    .setLineSpacing(w * 0.014f, 1f)
-                    .setMaxLines(4)
-                    .setEllipsize(TextUtils.TruncateAt.END)
-                    .build()
+                val layout = noteLayout(overlayNote, MAX_NOTE_LINES)
                 val top = h - (layout.height + pad * 2)
                 val shade = Paint().apply {
                     shader = LinearGradient(

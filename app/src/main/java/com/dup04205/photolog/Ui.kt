@@ -663,12 +663,24 @@ fun DetailScreen(
                 }
             }
             PlaceRow(entry)
+            val noteLines = remember(note) { ShareImage.noteLineCount(note) }
             OutlinedTextField(
                 value = note,
-                onValueChange = { note = it },
+                onValueChange = { new ->
+                    // 공유 이미지 기준 5줄을 넘는 입력은 받지 않는다(지우는 것은 언제나 허용)
+                    val lines = ShareImage.noteLineCount(new)
+                    if (lines <= ShareImage.MAX_NOTE_LINES || lines <= noteLines) note = new
+                },
                 label = { Text("기록") },
-                placeholder = { Text("이 사진에 남길 이야기를 적어 두세요.") },
-                minLines = 6,
+                placeholder = { Text("이 사진에 남길 이야기를 적어 두세요. (최대 5줄)") },
+                supportingText = {
+                    Text(
+                        "$noteLines / ${ShareImage.MAX_NOTE_LINES}줄",
+                        color = if (noteLines >= ShareImage.MAX_NOTE_LINES) Stamp
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                minLines = 5,
                 textStyle = LocalTextStyle.current.copy(
                     fontFamily = NoteFont,
                     fontSize = 16.sp,
