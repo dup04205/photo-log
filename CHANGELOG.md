@@ -4,6 +4,7 @@
 
 | 버전 | 내용 | 코드 | 변경 |
 |---|---|---|---|
+| v0.9.6 | 공유 버튼 위치 올림 - 아래 고정 여백, 옵션 영역 스크롤 | [v0.9.6 코드](https://github.com/dup04205/photo-log/tree/43847ce5cb20da7818b9396fd69c99e3c41de167) | [43847ce](https://github.com/dup04205/photo-log/commit/43847ce5cb20da7818b9396fd69c99e3c41de167) |
 | v0.9.5 | 공유 화면의 공유 버튼이 내비게이션 바에 가려지던 문제 수정 | [v0.9.5 코드](https://github.com/dup04205/photo-log/tree/9e19c3aed3920c53367245d1df6f9b6dcc22c2ef) | [9e19c3a](https://github.com/dup04205/photo-log/commit/9e19c3aed3920c53367245d1df6f9b6dcc22c2ef) |
 | v0.9.4 | 플레이스토어 준비 - 타깃 SDK 36, 사진 전체 접근 권한 제거, AAB 빌드 | [v0.9.4 코드](https://github.com/dup04205/photo-log/tree/a86098a33e07d34a049bd4917b9c75f43be1c9f1) | [a86098a](https://github.com/dup04205/photo-log/commit/a86098a33e07d34a049bd4917b9c75f43be1c9f1) |
 | v0.9.3 | 사진 갤러리 숨김(앱 전용 저장), 백업 내보내기·불러오기 | [v0.9.3 코드](https://github.com/dup04205/photo-log/tree/570a119362a161df5b61be862174b700f077e36c) | [570a119](https://github.com/dup04205/photo-log/commit/570a119362a161df5b61be862174b700f077e36c) |
