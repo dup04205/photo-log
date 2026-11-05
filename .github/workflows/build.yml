@@ -68,29 +68,33 @@ jobs:
       - name: Build
         run: |
           chmod +x gradlew
-          if ! SIGNING_PASSWORD="$SIGNING_PASSWORD_CLEAN" ./gradlew assembleRelease --no-daemon > build.log 2>&1; then
+          if ! SIGNING_PASSWORD="$SIGNING_PASSWORD_CLEAN" ./gradlew assembleRelease bundleRelease --no-daemon > build.log 2>&1; then
             echo "::error::빌드 실패: $(grep -A12 'What went wrong' build.log | tr '\n' ' ' | cut -c1-1500)"
             tail -60 build.log
             exit 1
           fi
           tail -5 build.log
           cp app/build/outputs/apk/release/app-release.apk PHOTO-LOG.apk
+          # 플레이스토어 업로드용 AAB (같은 키 = 업로드 키로 서명)
+          cp app/build/outputs/bundle/release/app-release.aab PHOTO-LOG.aab
           rm -f app/release.keystore
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: photo-log-apk
-          path: PHOTO-LOG.apk
+          path: |
+            PHOTO-LOG.apk
+            PHOTO-LOG.aab
 
       # 최신 APK를 apk 브랜치에 한 파일로 보관한다(이전 빌드는 덮어쓴다).
       - name: Publish APK to apk branch
         run: |
-          mkdir out && cp PHOTO-LOG.apk out/
+          mkdir out && cp PHOTO-LOG.apk PHOTO-LOG.aab out/
           cd out
           git init -q -b apk
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
           echo "build ${{ github.run_number }} · ${{ github.sha }}" > BUILD.txt
-          git add PHOTO-LOG.apk BUILD.txt
+          git add PHOTO-LOG.apk PHOTO-LOG.aab BUILD.txt
           git commit -qm "APK build ${{ github.run_number }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk

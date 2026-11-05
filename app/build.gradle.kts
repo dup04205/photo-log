@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.dup04205.photolog"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.dup04205.photolog"
         minSdk = 29
-        targetSdk = 34
-        versionCode = 12
-        versionName = "0.9.3"
+        targetSdk = 36
+        versionCode = 13
+        versionName = "0.9.4"
     }
 
     // 서명 키는 저장소에 두지 않는다. GitHub Actions가 Secrets에서 app/release.keystore를 복원하고

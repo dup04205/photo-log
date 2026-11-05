@@ -10,7 +10,6 @@ import android.graphics.Matrix
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
-import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
@@ -35,8 +34,6 @@ object PhotoStore {
         add(Manifest.permission.ACCESS_MEDIA_LOCATION)
         add(Manifest.permission.ACCESS_FINE_LOCATION)
         add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.READ_MEDIA_IMAGES)
-        else add(Manifest.permission.READ_EXTERNAL_STORAGE)
     }.toTypedArray()
 
     fun photosDir(ctx: Context): File = File(ctx.filesDir, "photos").apply { mkdirs() }
