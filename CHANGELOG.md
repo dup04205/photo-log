@@ -4,6 +4,7 @@
 
 | 버전 | 내용 | 코드 | 변경 |
 |---|---|---|---|
+| v0.9.3 | 사진 갤러리 숨김(앱 전용 저장), 백업 내보내기·불러오기 | [v0.9.3 코드](https://github.com/dup04205/photo-log/tree/570a119362a161df5b61be862174b700f077e36c) | [570a119](https://github.com/dup04205/photo-log/commit/570a119362a161df5b61be862174b700f077e36c) |
 | v0.9.2 | 설정 화면·5줄 안내 문구 제거, 카드 미리보기 잘림 수정 | [v0.9.2 코드](https://github.com/dup04205/photo-log/tree/92481c03b82ed3ee3ea23d0505dbe7d982617006) | [92481c0](https://github.com/dup04205/photo-log/commit/92481c03b82ed3ee3ea23d0505dbe7d982617006) |
 | v0.9.1 | 보안 정리 - 서명 키 Secrets 이동, Actions 해시 고정, 글꼴 라이선스 | [v0.9.1 코드](https://github.com/dup04205/photo-log/tree/d4bb16a091d8c21215225aff2fe557ecd6006204) | [d4bb16a](https://github.com/dup04205/photo-log/commit/d4bb16a091d8c21215225aff2fe557ecd6006204) |
 | v0.9 | 날짜 우측 하단 고정, 사진+기록 카드, 5줄 안내, 존댓말 문구 | [v0.9 코드](https://github.com/dup04205/photo-log/tree/59c241df0e9d17325ae5c6e9a13bd1260098df15) | [59c241d](https://github.com/dup04205/photo-log/commit/59c241df0e9d17325ae5c6e9a13bd1260098df15) |
