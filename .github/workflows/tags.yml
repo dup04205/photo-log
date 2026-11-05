@@ -18,17 +18,25 @@ jobs:
         with:
           fetch-depth: 0
       - name: Create missing tags
+        shell: bash
         run: |
+          set -u
           git config user.name "Jin"
           git config user.email "116756108+dup04205@users.noreply.github.com"
-          git fetch --tags -q
-          grep -v '^#' .github/version-tags.txt | while read -r tag sha desc; do
-            [ -z "$tag" ] && continue
+          git fetch --tags -q || true
+          fail=0
+          while read -r tag sha desc; do
+            case "$tag" in ""|\#*) continue ;; esac
             if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
               echo "있음: $tag"
-            else
-              git tag -a "$tag" "$sha" -m "PHOTO-LOG $tag: $desc"
-              git push -q origin "refs/tags/$tag"
-              echo "만듦: $tag -> $sha"
+              continue
             fi
-          done
+            if ! out=$(git tag -a "$tag" "$sha" -m "PHOTO-LOG $tag: $desc" 2>&1); then
+              echo "::error::tag $tag 실패: $out"; fail=1; continue
+            fi
+            if ! out=$(git push origin "refs/tags/$tag" 2>&1); then
+              echo "::error::push $tag 실패: $out"; fail=1; continue
+            fi
+            echo "::notice::만듦 $tag -> $sha"
+          done < .github/version-tags.txt
+          exit $fail
