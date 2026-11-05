@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -47,6 +51,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -71,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -214,6 +220,9 @@ fun ListScreen(
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var addMenu by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("photolog", 0) }
+    var showIndex by remember { mutableStateOf(prefs.getBoolean("showIndex", true)) }
 
     fun jump(prefix: String) {
         val i = headerIndex.entries.firstOrNull { it.key.startsWith(prefix) }?.value ?: return
@@ -221,7 +230,22 @@ fun ListScreen(
     }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Logo() }) },
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Logo() },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        showIndex = !showIndex
+                        prefs.edit().putBoolean("showIndex", showIndex).apply()
+                    }) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = if (showIndex) "날짜 메뉴 숨기기" else "날짜 메뉴 보기",
+                        )
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             Box {
                 ExtendedFloatingActionButton(
@@ -245,8 +269,16 @@ fun ListScreen(
         Column(Modifier.padding(pad).fillMaxSize()) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Row(Modifier.fillMaxSize()) {
-                DateIndex(byDay, onJump = { jump(it) })
-                VerticalDivider()
+                AnimatedVisibility(
+                    visible = showIndex,
+                    enter = expandHorizontally(),
+                    exit = shrinkHorizontally(),
+                ) {
+                    Row {
+                        DateIndex(byDay, onJump = { jump(it) })
+                        VerticalDivider()
+                    }
+                }
                 if (sorted.isEmpty()) {
                     Box(
                         Modifier.weight(1f).fillMaxHeight().padding(24.dp),
@@ -262,7 +294,7 @@ fun ListScreen(
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
+                        columns = GridCells.Fixed(if (showIndex) 3 else 4),
                         state = gridState,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 96.dp),
@@ -273,8 +305,8 @@ fun ListScreen(
                             item(key = "h-$day", span = { GridItemSpan(maxLineSpan) }) {
                                 Text(
                                     day.replace('-', '.'),
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
+                                    fontFamily = IndexFont,
+                                    fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 2.dp),
                                 )
@@ -292,10 +324,11 @@ fun ListScreen(
 private fun Logo() {
     Text(
         "PHOTO-LOG",
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
-        letterSpacing = 3.sp,
-        fontSize = 18.sp,
+        fontFamily = TitleFont,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        letterSpacing = 1.sp,
+        fontSize = 23.sp,
     )
 }
 
@@ -313,7 +346,8 @@ fun DateIndex(days: Map<String, List<Entry>>, onJump: (String) -> Unit) {
     ) {
         Text(
             "연 · 월 · 일",
-            fontSize = 11.sp,
+            fontSize = 12.sp,
+            fontFamily = IndexFont,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(6.dp),
         )
@@ -374,15 +408,16 @@ private fun IndexRow(
         Text(
             label,
             modifier = Modifier.weight(1f),
-            fontSize = if (bold) 14.sp else 13.sp,
+            fontSize = if (bold) 15.sp else if (mono) 13.sp else 14.sp,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+            fontFamily = IndexFont,
+            color = if (mono) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
         )
         Text(
             "$count",
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            fontFamily = IndexFont,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -500,6 +535,11 @@ fun DetailScreen(
                 label = { Text("기록") },
                 placeholder = { Text("이 사진에 남길 이야기를 적어 두세요.") },
                 minLines = 6,
+                textStyle = LocalTextStyle.current.copy(
+                    fontFamily = NoteFont,
+                    fontSize = 16.sp,
+                    lineHeight = 26.sp,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(

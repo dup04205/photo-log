@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 다크 모드: 검정 바탕 + 흰 글씨 -->
+    <color name="icon_bg">#000000</color>
+    <color name="icon_fg">#F5F5F5</color>
+    <color name="window_bg">#000000</color>
+</resources>

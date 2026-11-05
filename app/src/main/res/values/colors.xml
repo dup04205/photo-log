@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="icon_bg">#1B1E24</color>
+    <!-- 기본 모드: 흰 바탕 + 검정 글씨 -->
+    <color name="icon_bg">#FFFFFF</color>
+    <color name="icon_fg">#111111</color>
+    <color name="window_bg">#FFFFFF</color>
 </resources>
