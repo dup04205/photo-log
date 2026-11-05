@@ -142,7 +142,8 @@ struct ShareEditor: View {
             let lines = hasNote ? min(ShareImage.lineCount(note), ShareImage.maxNoteLines) : 0
             let unit: CGFloat = 1 / 1080
             let padF = 54 * unit
-            let textF = lines > 0 ? (54 + CGFloat(lines) * (37.8 + 15.1)) * unit : 0
+            // 한 줄 높이 = 글자 크기 37.8 × 줄 높이 1.2 + 줄 간격 15.1 (iOS 글꼴 기준)
+            let textF = lines > 0 ? (54 + CGFloat(lines) * (37.8 * 1.2 + 15.1)) * unit : 0
             let footF = (65 + 26 + 54) * unit
             // 카드 가로 cw 일 때 높이 = cw * (pad + (0.9/ratio) + text + foot)
             let hPerW = padF + 0.9 / r + textF + footF
@@ -159,6 +160,7 @@ struct ShareEditor: View {
                         .lineSpacing(cw * 0.014)
                         .foregroundColor(Color(UIColor(hex: 0x111111)))
                         .lineLimit(ShareImage.maxNoteLines)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, cw * 0.05)
                 }
