@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="share" path="share/" />
+    <!-- 앱 전용 사진: 카메라 촬영 저장과 원본 공유에만 임시로 주소를 연다 -->
+    <files-path name="photos" path="photos/" />
 </paths>

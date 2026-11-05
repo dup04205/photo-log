@@ -96,6 +96,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.Locale
 
 @Composable
@@ -120,13 +121,13 @@ fun PhotoLogApp() {
         persist()
         if (open) {
             selectedId = e.id
-            val msg = if (e.lat != null) "사진 폴더에 저장하고 촬영 위치를 기록했습니다"
-            else "사진 폴더에 저장했습니다 (위치 정보 없음)"
+            val msg = if (e.lat != null) "저장하고 촬영 위치를 기록했습니다"
+            else "저장했습니다 (위치 정보 없음)"
             Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
         }
     }
 
-    /** 갤러리·Google 포토에서 고른 사진(여러 장 가능)을 PHOTO-LOG 폴더로 복사한다. */
+    /** 갤러리·Google 포토에서 고른 사진(여러 장 가능)을 앱 전용 공간으로 복사한다. */
     fun importMany(uris: List<Uri>) {
         if (uris.isEmpty()) return
         scope.launch {
@@ -152,13 +153,11 @@ fun PhotoLogApp() {
 
     fun deleteEntry(e: Entry) {
         scope.launch {
-            val removed = withContext(Dispatchers.IO) { PhotoStore.delete(ctx, Uri.parse(e.uri)) }
+            withContext(Dispatchers.IO) { PhotoStore.delete(ctx, Uri.parse(e.uri)) }
             entries.removeAll { it.id == e.id }
             persist()
             if (selectedId == e.id) selectedId = null
-            val msg = if (removed) "삭제했습니다"
-            else "기록을 삭제했습니다. 폴더의 사진은 갤러리에서 지워 주세요"
-            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, "삭제했습니다", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -167,19 +166,73 @@ fun PhotoLogApp() {
     ) { }
     LaunchedEffect(Unit) { permissions.launch(PhotoStore.wantedPermissions()) }
 
+    // 0.9.2까지 공용 사진 폴더에 저장된 사진을 앱 전용 공간으로 옮긴다(갤러리에서 숨김)
+    LaunchedEffect(Unit) {
+        if (entries.none { it.uri.startsWith("content://") }) return@LaunchedEffect
+        busy = true
+        val (updated, moved, failed) = withContext(Dispatchers.IO) {
+            PhotoStore.migrateLegacy(ctx, entries.toList())
+        }
+        updated.forEachIndexed { i, e -> if (i < entries.size && entries[i].id == e.id) entries[i] = e }
+        persist()
+        busy = false
+        if (moved > 0 || failed > 0) {
+            val msg = if (failed == 0) "사진 ${moved}장을 앱 안으로 옮겼습니다. 이제 갤러리에 보이지 않습니다"
+            else "사진 ${moved}장을 옮겼고 ${failed}장은 옮기지 못했습니다"
+            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 백업: zip 하나로 내보내기 / 불러오기
+    val exportBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { dest ->
+        if (dest == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            val r = withContext(Dispatchers.IO) { runCatching { Backup.export(ctx, entries.toList(), dest) } }
+            busy = false
+            val msg = r.fold(
+                onSuccess = { "백업했습니다 (기록 ${it.entries}개, 사진 ${it.photos}장)" },
+                onFailure = { "백업하지 못했습니다: ${it.message ?: "알 수 없는 오류"}" },
+            )
+            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+    val importBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { src ->
+        if (src == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            val ids = entries.map { it.id }.toSet()
+            val r = withContext(Dispatchers.IO) { runCatching { Backup.import(ctx, src, ids) } }
+            busy = false
+            r.onSuccess { res ->
+                entries.addAll(res.added)
+                persist()
+                val msg = if (res.skipped > 0) "${res.added.size}개를 불러왔습니다 (이미 있는 ${res.skipped}개는 건너뜀)"
+                else "${res.added.size}개를 불러왔습니다"
+                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+            }.onFailure {
+                Toast.makeText(ctx, "불러오지 못했습니다: ${it.message ?: "백업 파일을 확인해 주세요"}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        val u = pendingCamera?.let { Uri.parse(it) }
+        val f = pendingCamera?.let { File(it) }
         pendingCamera = null
-        if (u == null) return@rememberLauncherForActivityResult
-        if (!ok) {
-            PhotoStore.discard(ctx, u)
+        if (f == null) return@rememberLauncherForActivityResult
+        if (!ok || !f.exists() || f.length() == 0L) {
+            PhotoStore.discard(f)
             return@rememberLauncherForActivityResult
         }
         scope.launch {
             busy = true
-            val info = withContext(Dispatchers.IO) { PhotoStore.finishCapture(ctx, u) }
+            val info = withContext(Dispatchers.IO) { PhotoStore.finishCapture(ctx, f) }
             busy = false
-            addEntry(u, info)
+            addEntry(Uri.fromFile(f), info)
         }
     }
 
@@ -226,18 +279,14 @@ fun PhotoLogApp() {
             onOpen = { selectedId = it },
             onDelete = { deleteEntry(it) },
             onCamera = {
-                val u = PhotoStore.newImageUri(ctx)
-                if (u == null) {
-                    Toast.makeText(ctx, "사진 폴더를 만들 수 없습니다", Toast.LENGTH_SHORT).show()
-                } else {
-                    pendingCamera = u.toString()
-                    try {
-                        camera.launch(u)
-                    } catch (_: ActivityNotFoundException) {
-                        PhotoStore.discard(ctx, u)
-                        pendingCamera = null
-                        Toast.makeText(ctx, "카메라 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
-                    }
+                val (file, uri) = PhotoStore.cameraTarget(ctx)
+                pendingCamera = file.path
+                try {
+                    camera.launch(uri)
+                } catch (_: ActivityNotFoundException) {
+                    PhotoStore.discard(file)
+                    pendingCamera = null
+                    Toast.makeText(ctx, "카메라 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
                 }
             },
             onPick = { picker.launch("image/*") },
@@ -256,6 +305,11 @@ fun PhotoLogApp() {
                     }
                 }
             } else null,
+            onExport = {
+                val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+                exportBackup.launch("PHOTO-LOG-백업-$day.zip")
+            },
+            onImport = { importBackup.launch(arrayOf("application/zip", "application/octet-stream")) },
         )
     }
 }
@@ -271,7 +325,10 @@ fun ListScreen(
     onCamera: () -> Unit,
     onPick: () -> Unit,
     onGooglePhotos: (() -> Unit)?,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
 ) {
+    var moreMenu by remember { mutableStateOf(false) }
     val sorted = entries.sortedWith(
         compareByDescending<Entry> { it.date }.thenByDescending { it.created }
     )
@@ -310,6 +367,23 @@ fun ListScreen(
                             Icons.Filled.Menu,
                             contentDescription = if (showIndex) "날짜 메뉴 숨기기" else "날짜 메뉴 보기",
                         )
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { moreMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "더보기")
+                        }
+                        DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("백업 내보내기") },
+                                onClick = { moreMenu = false; onExport() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("백업 불러오기") },
+                                onClick = { moreMenu = false; onImport() },
+                            )
+                        }
                     }
                 },
             )
@@ -359,7 +433,7 @@ fun ListScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            "아직 사진이 없습니다.\n아래 ＋ 사진 추가로 첫 기록을 남겨 보세요.\n사진은 사진/PHOTO-LOG 폴더에 저장됩니다.",
+                            "아직 사진이 없습니다.\n아래 ＋ 사진 추가로 첫 기록을 남겨 보세요.\n사진은 앱 안에만 저장되어 갤러리에 보이지 않습니다.",
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
@@ -738,7 +812,7 @@ private fun DeleteDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("삭제") },
-        text = { Text("이 사진과 기록을 삭제합니다. 사진/PHOTO-LOG 폴더의 파일도 함께 지워지며 되돌릴 수 없습니다.") },
+        text = { Text("이 사진과 기록을 삭제합니다. 사진 파일도 함께 지워지며 되돌릴 수 없습니다.") },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text("삭제", color = MaterialTheme.colorScheme.error) }
         },
@@ -759,7 +833,7 @@ private fun ShareDialog(entry: Entry, note: String, onDismiss: () -> Unit, onEdi
                 }
                 ShareOption("원본 그대로 공유", "사진 파일 + 기록 글 · 사진 속 위치 정보도 함께 전달됩니다") {
                     onDismiss()
-                    Sharing.send(ctx, Uri.parse(entry.uri), entry, note)
+                    Sharing.send(ctx, PhotoStore.shareUri(ctx, entry.uri), entry, note)
                 }
                 ShareOption("기록 복사", "기록 · 날짜 · 지도 링크") {
                     onDismiss()

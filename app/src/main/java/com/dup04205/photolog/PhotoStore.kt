@@ -2,7 +2,6 @@ package com.dup04205.photolog
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -16,8 +15,10 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayInputStream
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,12 +26,11 @@ import java.util.Locale
 data class PhotoInfo(val date: String, val lat: Double?, val lon: Double?)
 
 /**
- * 사진 파일을 폰의 공용 사진 폴더(Pictures/PHOTO-LOG)에 저장하고 읽는다.
- * 갤러리 앱과 파일 앱에서 그대로 보이며, 앱을 지워도 사진은 남는다.
+ * 사진 파일을 앱 전용 저장 공간(files/photos)에 저장하고 읽는다.
+ * 다른 앱(갤러리·Google 포토·파일 앱)에서는 보이지 않는다.
+ * 앱을 지우면 함께 지워지므로, 백업(zip 내보내기/불러오기)으로 보관·이전한다.
  */
 object PhotoStore {
-    private const val FOLDER = "Pictures/PHOTO-LOG"
-
     fun wantedPermissions(): Array<String> = buildList {
         add(Manifest.permission.ACCESS_MEDIA_LOCATION)
         add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -39,69 +39,110 @@ object PhotoStore {
         else add(Manifest.permission.READ_EXTERNAL_STORAGE)
     }.toTypedArray()
 
-    /** 폴더에 빈 사진 항목을 만든다. 카메라는 여기에 바로 쓴다. */
-    fun newImageUri(
-        ctx: Context,
-        pending: Boolean = false,
-        mime: String = "image/jpeg",
-        ext: String = "jpg",
-    ): Uri? = try {
-        val name = "PHOTOLOG_" +
-            SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date()) + "." + ext
-        val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, mime)
-            put(MediaStore.Images.Media.RELATIVE_PATH, FOLDER)
-            if (pending) put(MediaStore.Images.Media.IS_PENDING, 1)
+    fun photosDir(ctx: Context): File = File(ctx.filesDir, "photos").apply { mkdirs() }
+
+    /** 앱 전용 공간에 새 사진 파일 자리를 만든다(이름이 겹치지 않게). */
+    fun newPhotoFile(ctx: Context, ext: String = "jpg", preferredName: String? = null): File {
+        val dir = photosDir(ctx)
+        if (preferredName != null) {
+            val f = File(dir, preferredName)
+            if (!f.exists()) return f
         }
-        ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-    } catch (e: Exception) {
-        null
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+        var f = File(dir, "PHOTOLOG_$stamp.$ext")
+        var n = 1
+        while (f.exists()) f = File(dir, "PHOTOLOG_${stamp}_${n++}.$ext")
+        return f
     }
 
-    private fun publish(ctx: Context, uri: Uri) {
-        val values = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
-        ctx.contentResolver.update(uri, values, null, null)
+    /** 카메라 앱이 사진을 써 넣을 파일과 그 주소. */
+    fun cameraTarget(ctx: Context): Pair<File, Uri> {
+        val f = newPhotoFile(ctx)
+        return f to providerUri(ctx, f)
     }
 
-    fun discard(ctx: Context, uri: Uri) {
-        try {
-            ctx.contentResolver.delete(uri, null, null)
-        } catch (_: Exception) {
-        }
+    private fun providerUri(ctx: Context, f: File): Uri =
+        FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+
+    /** 기록의 사진 주소가 가리키는 앱 전용 파일(옛 공용 폴더 사진이면 null) */
+    fun fileOf(uri: String): File? {
+        val u = Uri.parse(uri)
+        return if (u.scheme == "file") u.path?.let { File(it) } else null
     }
 
-    /** 폴더의 사진 파일을 지운다. 앱을 재설치한 뒤에는 이전 사진을 지울 권한이 없어 false가 될 수 있다. */
+    /** 다른 앱에 넘길 수 있는 사진 주소(공유용) */
+    fun shareUri(ctx: Context, uri: String): Uri = fileOf(uri)?.let { providerUri(ctx, it) } ?: Uri.parse(uri)
+
+    fun discard(file: File) {
+        file.delete()
+    }
+
+    /** 사진 파일을 지운다. */
     fun delete(ctx: Context, uri: Uri): Boolean = try {
-        ctx.contentResolver.delete(uri, null, null) > 0
+        if (uri.scheme == "file") File(uri.path ?: "").delete()
+        else ctx.contentResolver.delete(uri, null, null) > 0
     } catch (_: Exception) {
         false
     }
 
     /** 카메라 촬영이 끝난 사진에서 날짜·위치를 읽는다. 사진에 위치가 없으면 방금 전 폰 위치로 보완한다. */
-    fun finishCapture(ctx: Context, uri: Uri): PhotoInfo {
-        val bytes = readBytes(ctx, original(ctx, uri)) ?: readBytes(ctx, uri)
+    fun finishCapture(ctx: Context, file: File): PhotoInfo {
+        val bytes = try { file.readBytes() } catch (_: Exception) { null }
         val info = bytes?.let { parse(it) } ?: PhotoInfo(today(), null, null)
         if (info.lat != null) return info
         val loc = lastLocation(ctx) ?: return info
         return info.copy(lat = loc.latitude, lon = loc.longitude)
     }
 
-    /** 앨범 사진을 원본 그대로(EXIF 포함) PHOTO-LOG 폴더에 복사한다. */
+    /** 갤러리·Google 포토 사진을 원본 그대로(EXIF 포함) 앱 전용 공간에 복사한다. */
     fun importFrom(ctx: Context, src: Uri): Pair<Uri, PhotoInfo>? {
         val bytes = readBytes(ctx, original(ctx, src)) ?: readBytes(ctx, src) ?: return null
         val mime = ctx.contentResolver.getType(src) ?: "image/jpeg"
         val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "jpg"
-        val dst = newImageUri(ctx, pending = true, mime = mime, ext = ext) ?: return null
+        val dst = newPhotoFile(ctx, ext)
         return try {
-            val out = ctx.contentResolver.openOutputStream(dst) ?: throw IllegalStateException()
-            out.use { it.write(bytes) }
-            publish(ctx, dst)
-            dst to (parse(bytes) ?: PhotoInfo(today(), null, null))
+            dst.writeBytes(bytes)
+            Uri.fromFile(dst) to (parse(bytes) ?: PhotoInfo(today(), null, null))
         } catch (e: Exception) {
-            discard(ctx, dst)
+            dst.delete()
             null
         }
+    }
+
+    /**
+     * 0.9.2까지 공용 사진 폴더(갤러리에 보이던 곳)에 있던 사진을 앱 전용 공간으로 옮긴다.
+     * 복사에 성공하면 공용 폴더의 원본은 지워 갤러리에서 사라지게 한다.
+     * 돌려주는 값: 갱신된 기록 목록, 옮긴 장수, 실패 장수
+     */
+    fun migrateLegacy(ctx: Context, entries: List<Entry>): Triple<List<Entry>, Int, Int> {
+        var moved = 0
+        var failed = 0
+        val out = entries.map { e ->
+            val u = Uri.parse(e.uri)
+            if (u.scheme != "content") return@map e
+            val bytes = readBytes(ctx, original(ctx, u)) ?: readBytes(ctx, u)
+            if (bytes == null) {
+                failed++
+                return@map e
+            }
+            val mime = ctx.contentResolver.getType(u) ?: "image/jpeg"
+            val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "jpg"
+            val dst = newPhotoFile(ctx, ext)
+            try {
+                dst.writeBytes(bytes)
+            } catch (_: Exception) {
+                dst.delete()
+                failed++
+                return@map e
+            }
+            try {
+                ctx.contentResolver.delete(u, null, null)
+            } catch (_: Exception) {
+            }
+            moved++
+            e.copy(uri = Uri.fromFile(dst).toString())
+        }
+        return Triple(out, moved, failed)
     }
 
     /** 안드로이드가 위치 정보를 지우지 않은 원본 사진 주소. 권한이 없으면 원래 주소를 돌려준다. */
