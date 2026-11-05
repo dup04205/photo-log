@@ -25,8 +25,13 @@ jobs:
         env:
           SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
           # 폰에서 긴 값이 잘리지 않도록 두 조각으로 나눠 등록할 수도 있다(있으면 뒤에 이어 붙인다)
+          SIGNING_KEYSTORE_B64_1: ${{ secrets.SIGNING_KEYSTORE_B64_1 }}
           SIGNING_KEYSTORE_B64_2: ${{ secrets.SIGNING_KEYSTORE_B64_2 }}
         run: |
+          # 앞조각은 SIGNING_KEYSTORE_B64 또는 SIGNING_KEYSTORE_B64_1 어느 이름이든 받는다
+          [ -z "$SIGNING_KEYSTORE_B64" ] && SIGNING_KEYSTORE_B64="$SIGNING_KEYSTORE_B64_1"
+          len() { printf '%s' "$1" | tr -d ' \r\n\t' | wc -c; }
+          echo "::notice::키 조각 길이 - 앞: $(len "$SIGNING_KEYSTORE_B64")자, 뒤(_2): $(len "$SIGNING_KEYSTORE_B64_2")자 (정상: 1778자, 1778자. 한 번에 넣었다면 앞 3556자, 뒤 0자)"
           if [ -z "$SIGNING_KEYSTORE_B64" ]; then
             echo "::error::SIGNING_KEYSTORE_B64 secret이 없습니다. 저장소 Settings > Secrets and variables > Actions에 등록하세요."
             exit 1
