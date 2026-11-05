@@ -43,7 +43,8 @@ jobs:
             echo "::error::SIGNING_PASSWORD secret이 없습니다."; exit 1
           fi
           if ! out=$(keytool -list -v -keystore app/release.keystore -storepass "$PW" 2>&1); then
-            echo "::error::서명 키를 열지 못했습니다(비밀번호 또는 키 파일 확인): $(echo "$out" | grep -v JAVA_TOOL | tail -2 | tr '\n' ' ')"
+            echo "::error::서명 키를 열지 못했습니다: $(echo "$out" | grep -m1 -i 'keytool error' | cut -c1-300)"
+            echo "::error::키 파일 $(wc -c < app/release.keystore)바이트, sha256 $(sha256sum app/release.keystore | cut -c1-16) / 비밀번호 ${#PW}자 (정상: 2666바이트, sha256 900c76af30301b5a, 28자)"
             exit 1
           fi
           echo "::notice::서명 키 $(echo "$out" | grep -m1 -E 'SHA256:|SHA-256' | tr -s ' ')"
