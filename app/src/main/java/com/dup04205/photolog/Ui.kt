@@ -9,7 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +39,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -73,8 +76,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -111,6 +116,18 @@ fun PhotoLogApp() {
         val msg = if (e.lat != null) "사진 폴더에 저장하고 촬영 위치를 기록했습니다"
         else "사진 폴더에 저장했습니다 (위치 정보 없음)"
         Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    fun deleteEntry(e: Entry) {
+        scope.launch {
+            val removed = withContext(Dispatchers.IO) { PhotoStore.delete(ctx, Uri.parse(e.uri)) }
+            entries.removeAll { it.id == e.id }
+            persist()
+            if (selectedId == e.id) selectedId = null
+            val msg = if (removed) "삭제했습니다"
+            else "기록을 삭제했습니다. 폴더의 사진은 갤러리에서 지워 주세요"
+            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 
     val permissions = rememberLauncherForActivityResult(
@@ -158,25 +175,14 @@ fun PhotoLogApp() {
                     persist()
                 }
             },
-            onDelete = {
-                scope.launch {
-                    val removed = withContext(Dispatchers.IO) {
-                        PhotoStore.delete(ctx, Uri.parse(selected.uri))
-                    }
-                    entries.removeAll { it.id == selected.id }
-                    persist()
-                    selectedId = null
-                    val msg = if (removed) "삭제했습니다"
-                    else "기록을 삭제했습니다. 폴더의 사진은 갤러리에서 지워 주세요"
-                    Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
-                }
-            },
+            onDelete = { deleteEntry(selected) },
         )
     } else {
         ListScreen(
             entries = entries,
             busy = busy,
             onOpen = { selectedId = it },
+            onDelete = { deleteEntry(it) },
             onCamera = {
                 val u = PhotoStore.newImageUri(ctx)
                 if (u == null) {
@@ -204,6 +210,7 @@ fun ListScreen(
     entries: List<Entry>,
     busy: Boolean,
     onOpen: (String) -> Unit,
+    onDelete: (Entry) -> Unit,
     onCamera: () -> Unit,
     onPick: () -> Unit,
 ) {
@@ -220,6 +227,8 @@ fun ListScreen(
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var addMenu by remember { mutableStateOf(false) }
+    var shareFor by remember { mutableStateOf<Entry?>(null) }
+    var deleteFor by remember { mutableStateOf<Entry?>(null) }
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("photolog", 0) }
     var showIndex by remember { mutableStateOf(prefs.getBoolean("showIndex", true)) }
@@ -311,12 +320,27 @@ fun ListScreen(
                                     modifier = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 2.dp),
                                 )
                             }
-                            items(list, key = { it.id }) { e -> Tile(e) { onOpen(e.id) } }
+                            items(list, key = { it.id }) { e ->
+                                Tile(
+                                    e = e,
+                                    onClick = { onOpen(e.id) },
+                                    onShare = { shareFor = e },
+                                    onDelete = { deleteFor = e },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    shareFor?.let { e -> ShareDialog(e, e.note) { shareFor = null } }
+    deleteFor?.let { e ->
+        DeleteDialog(
+            onConfirm = { deleteFor = null; onDelete(e) },
+            onDismiss = { deleteFor = null },
+        )
     }
 }
 
@@ -423,14 +447,25 @@ private fun IndexRow(
     }
 }
 
+/* 사진 칸: 누르면 열기, 꾹 누르면 공유·삭제 메뉴 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Tile(e: Entry, onClick: () -> Unit) {
+private fun Tile(e: Entry, onClick: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
     Box(
         Modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(4.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    menu = true
+                },
+                onLongClickLabel = "공유·삭제 메뉴",
+            )
     ) {
         AsyncImage(
             model = Uri.parse(e.uri),
@@ -454,6 +489,20 @@ private fun Tile(e: Entry, onClick: () -> Unit) {
                     .size(7.dp)
                     .clip(CircleShape)
                     .background(Stamp)
+            )
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("공유") },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                onClick = { menu = false; onShare() },
+            )
+            DropdownMenuItem(
+                text = { Text("삭제", color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                },
+                onClick = { menu = false; onDelete() },
             )
         }
     }
@@ -563,47 +612,56 @@ fun DetailScreen(
     }
 
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("삭제") },
-            text = { Text("이 사진과 기록을 삭제합니다. 사진/PHOTO-LOG 폴더의 파일도 함께 지워지며 되돌릴 수 없습니다.") },
-            confirmButton = {
-                TextButton(onClick = { confirmDelete = false; onDelete() }) {
-                    Text("삭제", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("취소") } },
+        DeleteDialog(
+            onConfirm = { confirmDelete = false; onDelete() },
+            onDismiss = { confirmDelete = false },
         )
     }
+    if (shareOpen) ShareDialog(entry, note.trim()) { shareOpen = false }
+}
 
-    if (shareOpen) {
-        val trimmed = note.trim()
-        AlertDialog(
-            onDismissRequest = { shareOpen = false },
-            title = { Text("공유하기") },
-            text = {
-                Column {
-                    ShareOption("사진 + 메모 카드", "인스타그램 피드 비율(4:5) 카드 이미지") {
-                        shareOpen = false
-                        scope.launch {
-                            val u = withContext(Dispatchers.IO) { ShareCard.render(ctx, entry, trimmed) }
-                            if (u != null) Sharing.send(ctx, u, entry, trimmed)
-                            else Toast.makeText(ctx, "카드를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    ShareOption("사진만", "원본 사진 + 메모 글") {
-                        shareOpen = false
-                        Sharing.send(ctx, Uri.parse(entry.uri), entry, trimmed)
-                    }
-                    ShareOption("메모 복사", "메모 · 날짜 · 지도 링크") {
-                        shareOpen = false
-                        Sharing.copy(ctx, Sharing.text(entry, trimmed))
+@Composable
+private fun DeleteDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("삭제") },
+        text = { Text("이 사진과 기록을 삭제합니다. 사진/PHOTO-LOG 폴더의 파일도 함께 지워지며 되돌릴 수 없습니다.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
+}
+
+@Composable
+private fun ShareDialog(entry: Entry, note: String, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("공유하기") },
+        text = {
+            Column {
+                ShareOption("사진 + 메모 카드", "인스타그램 피드 비율(4:5) 카드 이미지") {
+                    scope.launch {
+                        val u = withContext(Dispatchers.IO) { ShareCard.render(ctx, entry, note) }
+                        onDismiss()
+                        if (u != null) Sharing.send(ctx, u, entry, note)
+                        else Toast.makeText(ctx, "카드를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { shareOpen = false }) { Text("닫기") } },
-        )
-    }
+                ShareOption("사진만", "원본 사진 + 메모 글") {
+                    onDismiss()
+                    Sharing.send(ctx, Uri.parse(entry.uri), entry, note)
+                }
+                ShareOption("메모 복사", "메모 · 날짜 · 지도 링크") {
+                    onDismiss()
+                    Sharing.copy(ctx, Sharing.text(entry, note))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+    )
 }
 
 @Composable
