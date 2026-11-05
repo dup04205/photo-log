@@ -40,6 +40,9 @@
 - Kotlin + Jetpack Compose (Material 3), minSdk 29(안드로이드 10)
 - `Entry.kt` 데이터·저장소, `PhotoStore.kt` 폴더 저장·EXIF, `Sharing.kt` 공유·카드, `Ui.kt` 화면
 
+## 버전
+버전별 변경 내용과 각 시점의 코드는 [CHANGELOG.md](CHANGELOG.md)에 있다.
+
 ## 라이선스
 - 앱에 포함된 글꼴은 모두 SIL Open Font License 1.1을 따른다. 라이선스 전문은 `licenses/` 폴더에 있다.
   - Playfair Display — `licenses/OFL-PlayfairDisplay.txt`
