@@ -1,6 +1,7 @@
 package com.dup04205.photolog
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -106,18 +107,44 @@ fun PhotoLogApp() {
 
     fun persist() = repo.save(entries.toList())
 
-    fun addEntry(uri: Uri, info: PhotoInfo) {
+    fun addEntry(uri: Uri, info: PhotoInfo, open: Boolean = true) {
         val now = System.currentTimeMillis()
         val e = Entry(
-            id = "p$now", uri = uri.toString(), date = info.date, note = "",
+            id = "p${now}_${entries.size}", uri = uri.toString(), date = info.date, note = "",
             lat = info.lat, lon = info.lon, created = now,
         )
         entries.add(e)
         persist()
-        selectedId = e.id
-        val msg = if (e.lat != null) "사진 폴더에 저장하고 촬영 위치를 기록했습니다"
-        else "사진 폴더에 저장했습니다 (위치 정보 없음)"
-        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+        if (open) {
+            selectedId = e.id
+            val msg = if (e.lat != null) "사진 폴더에 저장하고 촬영 위치를 기록했습니다"
+            else "사진 폴더에 저장했습니다 (위치 정보 없음)"
+            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 갤러리·Google 포토·드라이브 등에서 고른 사진(여러 장 가능)을 PHOTO-LOG 폴더로 복사한다. */
+    fun importMany(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        scope.launch {
+            busy = true
+            val results = withContext(Dispatchers.IO) { uris.map { PhotoStore.importFrom(ctx, it) } }
+            busy = false
+            val ok = results.filterNotNull()
+            if (ok.size == 1 && uris.size == 1) {
+                addEntry(ok[0].first, ok[0].second, open = true)
+                return@launch
+            }
+            ok.forEach { addEntry(it.first, it.second, open = false) }
+            val failed = uris.size - ok.size
+            val withPlace = ok.count { it.second.lat != null }
+            val msg = when {
+                ok.isEmpty() -> "사진을 가져오지 못했습니다"
+                failed > 0 -> "${ok.size}장을 가져왔습니다 (위치 ${withPlace}장, 실패 ${failed}장)"
+                else -> "${ok.size}장을 가져왔습니다 (위치 정보 ${withPlace}장)"
+            }
+            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+        }
     }
 
     fun deleteEntry(e: Entry) {
@@ -153,15 +180,30 @@ fun PhotoLogApp() {
         }
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { src ->
-        if (src == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            busy = true
-            val r = withContext(Dispatchers.IO) { PhotoStore.importFrom(ctx, src) }
-            busy = false
-            if (r == null) Toast.makeText(ctx, "사진을 가져오지 못했습니다", Toast.LENGTH_SHORT).show()
-            else addEntry(r.first, r.second)
+    // 갤러리(기기 사진): 여러 장 선택
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris -> importMany(uris) }
+
+    // 파일·클라우드: Google 드라이브, OneDrive, Dropbox 등 폰에 설치된 저장소가 모두 뜬다
+    val files = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris -> importMany(uris) }
+
+    // Google 포토 앱으로 바로 열기 (클라우드에만 있는 사진도 내려받아 가져온다)
+    val googlePhotos = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data ?: return@rememberLauncherForActivityResult
+        val uris = buildList {
+            val clip = data.clipData
+            if (clip != null) for (i in 0 until clip.itemCount) add(clip.getItemAt(i).uri)
+            else data.data?.let { add(it) }
         }
+        importMany(uris)
+    }
+    val hasGooglePhotos = remember {
+        ctx.packageManager.getLaunchIntentForPackage(GOOGLE_PHOTOS) != null
     }
 
     val selected = entries.firstOrNull { it.id == selectedId }
@@ -201,6 +243,22 @@ fun PhotoLogApp() {
                 }
             },
             onPick = { picker.launch("image/*") },
+            onGooglePhotos = if (hasGooglePhotos) {
+                {
+                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "image/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        setPackage(GOOGLE_PHOTOS)
+                    }
+                    try {
+                        googlePhotos.launch(intent)
+                    } catch (_: ActivityNotFoundException) {
+                        picker.launch("image/*")
+                    }
+                }
+            } else null,
+            onFiles = { files.launch(arrayOf("image/*")) },
         )
     }
 }
@@ -215,6 +273,8 @@ fun ListScreen(
     onDelete: (Entry) -> Unit,
     onCamera: () -> Unit,
     onPick: () -> Unit,
+    onGooglePhotos: (() -> Unit)?,
+    onFiles: () -> Unit,
 ) {
     val sorted = entries.sortedWith(
         compareByDescending<Entry> { it.date }.thenByDescending { it.created }
@@ -270,8 +330,18 @@ fun ListScreen(
                         onClick = { addMenu = false; onCamera() },
                     )
                     DropdownMenuItem(
-                        text = { Text("앨범에서 가져오기") },
+                        text = { Text("갤러리에서 가져오기") },
                         onClick = { addMenu = false; onPick() },
+                    )
+                    if (onGooglePhotos != null) {
+                        DropdownMenuItem(
+                            text = { Text("Google 포토에서 가져오기") },
+                            onClick = { addMenu = false; onGooglePhotos() },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("드라이브·파일에서 가져오기") },
+                        onClick = { addMenu = false; onFiles() },
                     )
                 }
             }
@@ -726,3 +796,5 @@ private fun ShareOption(title: String, sub: String, onClick: () -> Unit) {
         Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+private const val GOOGLE_PHOTOS = "com.google.android.apps.photos"
