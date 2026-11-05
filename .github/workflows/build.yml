@@ -29,14 +29,36 @@ jobs:
             echo "::error::SIGNING_KEYSTORE_B64 secret이 없습니다. 저장소 Settings > Secrets and variables > Actions에 등록하세요."
             exit 1
           fi
-          echo "$SIGNING_KEYSTORE_B64" | base64 -d > app/release.keystore
+          # 붙여넣을 때 섞인 공백·줄바꿈은 base64가 아니므로 지운다
+          printf '%s' "$SIGNING_KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > app/release.keystore \
+            || { echo "::error::SIGNING_KEYSTORE_B64 값을 해독하지 못했습니다. 파일 내용 전체를 다시 붙여넣으세요."; exit 1; }
 
-      - name: Build
+      - name: Check signing key
         env:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
+          PW=$(printf '%s' "$SIGNING_PASSWORD" | tr -d ' \r\n\t')
+          echo "::add-mask::$PW"
+          if [ -z "$PW" ]; then
+            echo "::error::SIGNING_PASSWORD secret이 없습니다."; exit 1
+          fi
+          if ! out=$(keytool -list -v -keystore app/release.keystore -storepass "$PW" 2>&1); then
+            echo "::error::서명 키를 열지 못했습니다(비밀번호 또는 키 파일 확인): $(echo "$out" | grep -v JAVA_TOOL | tail -2 | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "::notice::서명 키 $(echo "$out" | grep -m1 -E 'SHA256:|SHA-256' | tr -s ' ')"
+          echo "::add-mask::$PW"
+          echo "SIGNING_PASSWORD_CLEAN=$PW" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          if ! SIGNING_PASSWORD="$SIGNING_PASSWORD_CLEAN" ./gradlew assembleRelease --no-daemon > build.log 2>&1; then
+            echo "::error::빌드 실패: $(grep -A12 'What went wrong' build.log | tr '\n' ' ' | cut -c1-1500)"
+            tail -60 build.log
+            exit 1
+          fi
+          tail -5 build.log
           cp app/build/outputs/apk/release/app-release.apk PHOTO-LOG.apk
           rm -f app/release.keystore
 
