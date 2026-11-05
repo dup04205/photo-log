@@ -12,8 +12,8 @@ android {
         applicationId = "com.dup04205.photolog"
         minSdk = 29
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.5"
+        versionCode = 6
+        versionName = "0.6"
     }
 
     // 빌드마다 같은 키로 서명해야 폰에서 앱을 지우지 않고 업데이트할 수 있다.

@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -613,6 +615,9 @@ fun DetailScreen(
         Column(
             Modifier
                 .padding(pad)
+                .consumeWindowInsets(pad)
+                // 키보드가 올라오면 그 높이만큼 화면을 줄여, 입력 중인 줄이 가려지지 않게 한다
+                .imePadding()
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
