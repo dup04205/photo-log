@@ -19,23 +19,25 @@ jobs:
           fetch-depth: 0
       - name: Create missing tags
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           set -u
-          git config user.name "Jin"
-          git config user.email "116756108+dup04205@users.noreply.github.com"
-          git fetch --tags -q || true
           fail=0
+          existing=$(gh api "repos/$REPO/git/matching-refs/tags/" --jq '.[].ref' || true)
           while read -r tag sha desc; do
             case "$tag" in ""|\#*) continue ;; esac
-            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-              echo "있음: $tag"
-              continue
+            if echo "$existing" | grep -qx "refs/tags/$tag"; then
+              echo "있음: $tag"; continue
             fi
-            if ! out=$(git tag -a "$tag" "$sha" -m "PHOTO-LOG $tag: $desc" 2>&1); then
-              echo "::error::tag $tag 실패: $out"; fail=1; continue
+            # 태그 객체(설명 포함)를 만든 뒤 refs/tags 를 연결한다
+            if ! obj=$(gh api "repos/$REPO/git/tags" -f tag="$tag" -f object="$sha" -f type=commit \
+                  -f message="PHOTO-LOG $tag: $desc" --jq .sha 2>&1); then
+              echo "::error::tag $tag 실패: $(echo "$obj" | tr '\n' ' ')"; fail=1; continue
             fi
-            if ! out=$(git push origin "refs/tags/$tag" 2>&1); then
-              echo "::error::push $tag 실패: $out"; fail=1; continue
+            if ! out=$(gh api "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$obj" 2>&1); then
+              echo "::error::ref $tag 실패: $(echo "$out" | tr '\n' ' ')"; fail=1; continue
             fi
             echo "::notice::만듦 $tag -> $sha"
           done < .github/version-tags.txt
