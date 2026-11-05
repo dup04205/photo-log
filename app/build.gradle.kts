@@ -12,8 +12,8 @@ android {
         applicationId = "com.dup04205.photolog"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.9.4"
+        versionCode = 14
+        versionName = "0.9.5"
     }
 
     // 서명 키는 저장소에 두지 않는다. GitHub Actions가 Secrets에서 app/release.keystore를 복원하고

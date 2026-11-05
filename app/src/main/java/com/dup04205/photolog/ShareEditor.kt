@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -108,12 +109,18 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
     var working by remember { mutableStateOf(false) }
     val density = LocalDensity.current
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // Android 15+ 에서는 팝업도 화면 끝까지 그려진다. 시스템 바 높이를 직접 받아(decorFitsSystemWindows = false)
+    // systemBarsPadding 으로 피해야 맨 아래 공유 버튼이 내비게이션 바에 가려지지 않는다.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
                 Modifier
                     .fillMaxSize()
                     .systemBarsPadding()
+                    .displayCutoutPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
