@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +22,20 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk PHOTO-LOG.apk
       - uses: actions/upload-artifact@v4
         with:
           name: photo-log-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: PHOTO-LOG.apk
+      # 최신 APK를 apk 브랜치에 한 파일로 보관한다(이전 빌드는 덮어쓴다).
+      - name: Publish APK to apk branch
+        run: |
+          mkdir out && cp PHOTO-LOG.apk out/
+          cd out
+          git init -q -b apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          echo "build ${{ github.run_number }} · ${{ github.sha }}" > BUILD.txt
+          git add PHOTO-LOG.apk BUILD.txt
+          git commit -qm "APK build ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk
