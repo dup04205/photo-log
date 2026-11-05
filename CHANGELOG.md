@@ -4,6 +4,7 @@
 
 | 버전 | 내용 | 코드 | 변경 |
 |---|---|---|---|
+| v0.9.4 | 플레이스토어 준비 - 타깃 SDK 36, 사진 전체 접근 권한 제거, AAB 빌드 | [v0.9.4 코드](https://github.com/dup04205/photo-log/tree/a86098a33e07d34a049bd4917b9c75f43be1c9f1) | [a86098a](https://github.com/dup04205/photo-log/commit/a86098a33e07d34a049bd4917b9c75f43be1c9f1) |
 | v0.9.3 | 사진 갤러리 숨김(앱 전용 저장), 백업 내보내기·불러오기 | [v0.9.3 코드](https://github.com/dup04205/photo-log/tree/570a119362a161df5b61be862174b700f077e36c) | [570a119](https://github.com/dup04205/photo-log/commit/570a119362a161df5b61be862174b700f077e36c) |
 | v0.9.2 | 설정 화면·5줄 안내 문구 제거, 카드 미리보기 잘림 수정 | [v0.9.2 코드](https://github.com/dup04205/photo-log/tree/92481c03b82ed3ee3ea23d0505dbe7d982617006) | [92481c0](https://github.com/dup04205/photo-log/commit/92481c03b82ed3ee3ea23d0505dbe7d982617006) |
 | v0.9.1 | 보안 정리 - 서명 키 Secrets 이동, Actions 해시 고정, 글꼴 라이선스 | [v0.9.1 코드](https://github.com/dup04205/photo-log/tree/d4bb16a091d8c21215225aff2fe557ecd6006204) | [d4bb16a](https://github.com/dup04205/photo-log/commit/d4bb16a091d8c21215225aff2fe557ecd6006204) |
