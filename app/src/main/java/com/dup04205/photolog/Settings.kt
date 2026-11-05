@@ -53,7 +53,7 @@ fun SettingsDialog(onDismiss: () -> Unit) {
             Column {
                 SettingSwitch(
                     title = "필름카메라 날짜 표시",
-                    sub = "사진 화면과 공유 이미지에 '26 11 05 형식의 날짜 각인을 넣는다",
+                    sub = "사진 화면과 공유 이미지에 '26 11 05 형식의 날짜 각인을 넣습니다",
                     checked = settings.showStamp,
                     onChange = { settings.updateShowStamp(it) },
                 )

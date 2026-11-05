@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -47,8 +48,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -58,6 +62,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private class RatioOption(val label: String, val value: Float?)
@@ -69,9 +74,18 @@ private val Ratios = listOf(
     RatioOption("9:16", 9f / 16f),
 )
 
+/** 공유 형식 */
+private enum class ShareStyle(val label: String) {
+    PHOTO("사진만"),
+    OVERLAY("사진 위에 기록"),
+    CARD("사진 + 기록 카드"),
+}
+
+private const val LIMIT_NOTICE = "사진과 글을 합쳐서 공유할 때는 최대 5줄만 가능합니다."
+
 /**
  * 공유할 사진 크기 조절 화면.
- * 비율을 고르고, 두 손가락으로 확대·끌어서 위치를 맞춘 뒤 기록과 함께 공유한다.
+ * 비율과 형식을 고르고, 두 손가락으로 확대·끌어서 위치를 맞춘 뒤 기록과 함께 공유한다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,10 +103,11 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
     var offset by remember { mutableStateOf(Offset.Zero) }
     var frame by remember { mutableStateOf(IntSize.Zero) }
     val hasNote = note.isNotBlank()
-    var noteOnPhoto by remember { mutableStateOf(false) }
+    var style by remember { mutableStateOf(ShareStyle.PHOTO) }
     var sendText by remember { mutableStateOf(hasNote) }
     var stamp by remember { mutableStateOf(settings.showStamp) }
     var working by remember { mutableStateOf(false) }
+    val noteInImage = hasNote && style != ShareStyle.PHOTO
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -123,93 +138,107 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                     val ratio = Ratios[ratioIdx].value
                         ?: bmp?.let { it.width.toFloat() / it.height }
                         ?: 1f
-                    val w = minOf(maxWidth, maxHeight * ratio)
-                    val h = w / ratio
-                    Box(
-                        Modifier
-                            .size(w, h)
-                            .clipToBounds()
-                            .background(Color.Black)
-                            .onSizeChanged { frame = it }
-                            .pointerInput(ratioIdx, bmp) {
-                                detectTransformGestures { _, pan, z, _ ->
-                                    val b = bitmap ?: return@detectTransformGestures
+                    val card = style == ShareStyle.CARD
+
+                    // 사진 틀 크기: 카드면 기록·바닥글 자리를 남기고 계산한다
+                    val photoBox: @Composable (Dp, Dp) -> Unit = { w, h ->
+                        PhotoFrame(
+                            bmp = bmp,
+                            w = w,
+                            h = h,
+                            zoom = zoom,
+                            offset = offset,
+                            frame = frame,
+                            onFrame = { frame = it },
+                            gestureKey = ratioIdx to style,
+                            onTransform = { pan, z ->
+                                val b = bitmap
+                                if (b != null) {
                                     zoom = (zoom * z).coerceIn(1f, 5f)
                                     offset = clampOffset(offset + pan, b, frame, zoom)
                                 }
                             },
-                    ) {
-                        if (bmp != null && frame.width > 0) {
-                            val image = remember(bmp) { bmp.asImageBitmap() }
-                            Canvas(Modifier.fillMaxSize()) {
-                                val s = coverScale(bmp, frame) * zoom
-                                val dw = bmp.width * s
-                                val dh = bmp.height * s
-                                val o = clampOffset(offset, bmp, frame, zoom)
-                                drawImage(
-                                    image,
-                                    dstOffset = IntOffset(
-                                        ((size.width - dw) / 2 + o.x).roundToInt(),
-                                        ((size.height - dh) / 2 + o.y).roundToInt(),
-                                    ),
-                                    dstSize = IntSize(dw.roundToInt(), dh.roundToInt()),
-                                    filterQuality = FilterQuality.High,
-                                )
-                            }
-                        } else {
-                            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
-                        }
+                            date = entry.date,
+                            stamp = stamp,
+                            overlayNote = if (hasNote && style == ShareStyle.OVERLAY) note else null,
+                        )
+                    }
 
-                        // 결과 이미지와 같은 비율로 날짜·기록을 미리 보여준다
+                    if (!card) {
+                        val w = minOf(maxWidth, maxHeight * ratio)
+                        photoBox(w, w / ratio)
+                    } else {
+                        // 카드 결과물과 같은 비율: 가로 1080 중 여백 54, 사진 폭 972
+                        val lines = if (hasNote) minOf(ShareImage.noteLineCount(note), ShareImage.MAX_NOTE_LINES) else 0
+                        val unit = 1f / 1080f
+                        val padF = 54f * unit
+                        val textF = if (lines > 0) (54f + lines * (37.8f + 15.1f)) * unit else 0f
+                        val footF = (65f + 26f + 54f) * unit
+                        // 카드 가로 cw 일 때 높이 = cw * (pad + (0.9/ratio) + text + foot)
+                        val hPerW = padF + 0.9f / ratio + textF + footF
+                        val cw = minOf(maxWidth, maxHeight / hPerW)
+                        val pw = cw * 0.9f
                         Column(
                             Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
+                                .width(cw)
+                                .background(Color(0xFFF7F7F5))
+                                .padding(start = cw * 0.05f, end = cw * 0.05f, top = cw * 0.05f, bottom = cw * 0.05f)
                         ) {
-                            if (stamp) {
-                                FilmDateStamp(
-                                    entry.date,
-                                    Modifier
-                                        .align(Alignment.End)
-                                        .padding(end = w * 0.045f, bottom = w * 0.03f),
-                                    fontSize = (w.value * 0.03f).sp,
+                            photoBox(pw, pw / ratio)
+                            if (lines > 0) {
+                                Text(
+                                    note,
+                                    color = Color(0xFF111111),
+                                    fontFamily = NoteFont,
+                                    fontSize = (cw.value * 0.035f).sp,
+                                    lineHeight = (cw.value * 0.049f).sp,
+                                    maxLines = ShareImage.MAX_NOTE_LINES,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = cw * 0.05f),
                                 )
                             }
-                            if (noteOnPhoto && hasNote) {
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(Color.Transparent, Color(0xB3000000))
-                                            )
-                                        )
-                                        .padding(horizontal = w * 0.05f, vertical = w * 0.05f)
-                                ) {
-                                    Text(
-                                        note,
-                                        color = Color.White,
-                                        fontFamily = NoteFont,
-                                        fontSize = (w.value * 0.035f).sp,
-                                        lineHeight = (w.value * 0.035f * 1.4f).sp,
-                                        maxLines = ShareImage.MAX_NOTE_LINES,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = cw * 0.05f),
+                                verticalAlignment = Alignment.Bottom,
+                            ) {
+                                val foot = buildList {
+                                    add(entry.date.replace('-', '.'))
+                                    if (entry.lat != null && entry.lon != null) {
+                                        add(String.format(Locale.US, "%.4f, %.4f", entry.lat, entry.lon))
+                                    }
+                                }.joinToString("   ·   ")
+                                Text(
+                                    foot,
+                                    color = Color(0xFF8A8F98),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = (cw.value * 0.024f).sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "PHOTO-LOG",
+                                    color = Color(0xFF111111),
+                                    fontFamily = TitleFont,
+                                    fontStyle = FontStyle.Italic,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = (cw.value * 0.029f).sp,
+                                )
                             }
                         }
                     }
                 }
 
                 Text(
-                    "두 손가락으로 확대하고, 끌어서 보낼 부분을 맞춘다",
+                    "두 손가락으로 확대하고, 끌어서 보낼 부분을 맞춥니다",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Column(
                     Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Ratios.forEachIndexed { i, r ->
@@ -224,23 +253,42 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                             )
                         }
                     }
-                    SettingSwitch(
-                        title = "기록을 사진 위에 넣기",
-                        sub = if (hasNote) "사진 아래쪽에 기록 글을 얹는다" else "저장된 기록이 없다",
-                        checked = noteOnPhoto && hasNote,
-                        enabled = hasNote,
-                        onChange = { noteOnPhoto = it },
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShareStyle.entries.forEach { st ->
+                            FilterChip(
+                                selected = st == style,
+                                enabled = st == ShareStyle.PHOTO || hasNote,
+                                onClick = {
+                                    if (st != style) {
+                                        style = st
+                                        zoom = 1f
+                                        offset = Offset.Zero
+                                        if (st != ShareStyle.PHOTO) {
+                                            Toast.makeText(ctx, LIMIT_NOTICE, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                label = { Text(st.label) },
+                            )
+                        }
+                    }
+                    Text(
+                        if (!hasNote) "저장된 기록이 없어 사진만 공유할 수 있습니다"
+                        else if (noteInImage) LIMIT_NOTICE
+                        else "사진에 기록을 넣으려면 형식을 고릅니다",
+                        fontSize = 12.sp,
+                        color = if (noteInImage) Stamp else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     SettingSwitch(
                         title = "기록을 글로 함께 보내기",
-                        sub = "카카오톡·메시지에는 글로 붙고, 인스타그램용으로 클립보드에도 복사한다",
+                        sub = "카카오톡·메시지에는 글로 붙고, 인스타그램용으로 클립보드에도 복사합니다",
                         checked = sendText && hasNote,
                         enabled = hasNote,
                         onChange = { sendText = it },
                     )
                     SettingSwitch(
                         title = "필름카메라 날짜 넣기",
-                        sub = null,
+                        sub = "사진의 우측 하단에 날짜를 넣습니다",
                         checked = stamp,
                         onChange = { stamp = it },
                     )
@@ -250,33 +298,116 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                     onClick = {
                         val b = bitmap
                         if (b != null && frame.width > 0) {
-                        val ratio = Ratios[ratioIdx].value ?: (b.width.toFloat() / b.height)
-                        val crop = cropRect(b, frame, zoom, clampOffset(offset, b, frame, zoom))
-                        scope.launch {
-                            working = true
-                            val u = withContext(Dispatchers.IO) {
-                                ShareImage.render(
-                                    ctx, b, crop, ratio, entry,
-                                    overlayNote = if (noteOnPhoto && hasNote) note else "",
-                                    stamp = stamp,
-                                )
+                            val ratio = Ratios[ratioIdx].value ?: (b.width.toFloat() / b.height)
+                            val crop = cropRect(b, frame, zoom, clampOffset(offset, b, frame, zoom))
+                            val chosen = style
+                            scope.launch {
+                                working = true
+                                val u = withContext(Dispatchers.IO) {
+                                    when {
+                                        chosen == ShareStyle.CARD && hasNote ->
+                                            ShareImage.renderCard(ctx, b, crop, ratio, entry, note, stamp)
+                                        chosen == ShareStyle.OVERLAY && hasNote ->
+                                            ShareImage.render(ctx, b, crop, ratio, entry, note, stamp)
+                                        else ->
+                                            ShareImage.render(ctx, b, crop, ratio, entry, "", stamp)
+                                    }
+                                }
+                                working = false
+                                if (u == null) {
+                                    Toast.makeText(ctx, "이미지를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                val withText = sendText && hasNote
+                                if (withText) Sharing.copy(ctx, Sharing.text(entry, note))
+                                Sharing.sendImage(ctx, u, if (withText) Sharing.text(entry, note) else null)
+                                onDismiss()
                             }
-                            working = false
-                            if (u == null) {
-                                Toast.makeText(ctx, "이미지를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
-                                return@launch
-                            }
-                            val withText = sendText && hasNote
-                            if (withText) Sharing.copy(ctx, Sharing.text(entry, note))
-                            Sharing.sendImage(ctx, u, if (withText) Sharing.text(entry, note) else null)
-                            onDismiss()
-                        }
                         }
                     },
                     enabled = bmp != null && !working,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(if (working) "만드는 중…" else "공유") }
             }
+        }
+    }
+}
+
+/** 확대·이동할 수 있는 사진 틀. 날짜는 항상 우측 하단에 고정, 사진 위 기록은 날짜 위쪽에 놓는다. */
+@Composable
+private fun PhotoFrame(
+    bmp: Bitmap?,
+    w: Dp,
+    h: Dp,
+    zoom: Float,
+    offset: Offset,
+    frame: IntSize,
+    onFrame: (IntSize) -> Unit,
+    gestureKey: Any,
+    onTransform: (Offset, Float) -> Unit,
+    date: String,
+    stamp: Boolean,
+    overlayNote: String?,
+) {
+    Box(
+        Modifier
+            .size(w, h)
+            .clipToBounds()
+            .background(Color.Black)
+            .onSizeChanged(onFrame)
+            .pointerInput(gestureKey, bmp) {
+                detectTransformGestures { _, pan, z, _ -> onTransform(pan, z) }
+            },
+    ) {
+        if (bmp != null && frame.width > 0) {
+            val image = remember(bmp) { bmp.asImageBitmap() }
+            Canvas(Modifier.fillMaxSize()) {
+                val s = coverScale(bmp, frame) * zoom
+                val dw = bmp.width * s
+                val dh = bmp.height * s
+                val o = clampOffset(offset, bmp, frame, zoom)
+                drawImage(
+                    image,
+                    dstOffset = IntOffset(
+                        ((size.width - dw) / 2 + o.x).roundToInt(),
+                        ((size.height - dh) / 2 + o.y).roundToInt(),
+                    ),
+                    dstSize = IntSize(dw.roundToInt(), dh.roundToInt()),
+                    filterQuality = FilterQuality.High,
+                )
+            }
+        } else {
+            CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+        }
+
+        if (overlayNote != null) {
+            val bottomGap = if (stamp) w * (0.035f + 0.03f + 0.025f) else w * 0.05f
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000))))
+                    .padding(start = w * 0.05f, end = w * 0.05f, top = w * 0.05f, bottom = bottomGap)
+            ) {
+                Text(
+                    overlayNote,
+                    color = Color.White,
+                    fontFamily = NoteFont,
+                    fontSize = (w.value * 0.035f).sp,
+                    lineHeight = (w.value * 0.049f).sp,
+                    maxLines = ShareImage.MAX_NOTE_LINES,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (stamp) {
+            FilmDateStamp(
+                date,
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = w * 0.045f, bottom = w * 0.025f),
+                fontSize = (w.value * 0.03f).sp,
+            )
         }
     }
 }
