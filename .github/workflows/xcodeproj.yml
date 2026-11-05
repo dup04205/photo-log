@@ -1,0 +1,31 @@
+name: iOS Xcode project
+
+# XcodeGen으로 만든 PhotoLog.xcodeproj 를 ios 폴더와 함께 ios-project 브랜치에 올린다.
+# Mac에서 터미널 없이 Xcode로 바로 열어 iPhone에 설치할 때 쓴다.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/xcodeproj.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  project:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Generate and publish
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate && cd ..
+          mkdir pub && cp -R ios pub/ && rm -rf pub/ios/Screenshots/out pub/ios/build*
+          cd pub
+          git init -q -b ios-project
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          echo "${{ github.sha }}" > BUILD.txt
+          git add -A
+          git commit -qm "Xcode project ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" ios-project
