@@ -17,3 +17,7 @@ ios/build/
 ios/Payload/
 *.ipa
 xcuserdata/
+
+# iOS 스크린샷 결과
+ios/Screenshots/out/
+ios/build-sim/

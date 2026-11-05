@@ -88,7 +88,7 @@ Info.plist에 `ITSAppUsesNonExemptEncryption = false`가 들어 있어 빌드마
 ## 9. 앱 심사 정보
 
 - 로그인 필요: 아니요 (데모 계정 없음)
-- 연락처: 이상진 / dup04205@gmail.com / 전화번호는 직접 입력
+- 연락처: 이상진 / s.jin04205@gmail.com / 전화번호는 직접 입력
 - 심사 메모:
 
 ```
@@ -121,7 +121,10 @@ Permissions:
 | 4 | 공유 화면 (9:16, 사진 위에 기록) | 인스타그램 스토리에 바로 |
 | 5 | 다크 모드 그리드 | 흑과 백, 그리고 날짜의 주황 |
 
-찍는 방법: iPhone 16/17 Pro Max 또는 Plus 실기기에서 측면 버튼 + 볼륨 업. 6.9형 기기가 없으면 GitHub Actions의 iPhone 시뮬레이터에서 예시 사진으로 자동 촬영하도록 만들 수 있다.
+찍는 방법: GitHub Actions의 "iOS Screenshots" 워크플로가 iPhone 16 Pro Max(6.9형) 시뮬레이터에 예시 사진·기록을 넣고 위 5장을 자동으로 찍는다.
+- 결과는 `screenshots` 브랜치에 올라간다. `raw/`는 앱 화면 그대로(1320×2868), `framed/`는 위 문구를 얹은 버전(같은 크기). 둘 중 하나를 골라 올리면 된다.
+- 예시 사진은 Lorem Picsum(Unsplash 라이선스, 상업적 사용 가능)에서 받는다. 바꾸려면 `ios/Screenshots/photos.txt`의 번호를, 기록·날짜·장소는 `ios/Screenshots/demo.py`를, 문구는 `ios/Screenshots/frame.py`를 고친다.
+- 실행 옵션(-PLOpen, -PLShare 등)은 시뮬레이터에서만 동작하고 실제 기기 앱에는 영향이 없다.
 
 ## 11. 권한 문구 (Info.plist, 이미 반영)
 

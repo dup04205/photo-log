@@ -1,0 +1,64 @@
+name: iOS Screenshots
+
+# iPhone 6.9형 시뮬레이터에서 App Store 스크린샷 5장을 찍어 screenshots 브랜치에 올린다.
+# Actions 탭에서 직접 실행하거나, 스크린샷 스크립트를 바꾸면 실행된다.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ios/Screenshots/**", ".github/workflows/screenshots.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Take screenshots
+        env:
+          # 사진을 바꾸고 싶을 때 고를 후보(미리보기 photos-contact-sheet.jpg)
+          CANDIDATES: "10 11 15 16 17 20 24 28 29 42 48 54 57 63 102 106 152 225 292 312 326 429 431 1011 1015 1016 1018 1019 1025 1029 1035 1036 1039 1043 1044 1047 1050 1059 1060 1062 1067 1069 1080"
+        run: |
+          chmod +x ios/Screenshots/run.sh
+          ios/Screenshots/run.sh
+
+      - name: Add captions
+        run: |
+          python3 -m venv .venv && .venv/bin/pip install -q pillow
+          # 문구용 고운바탕 전체판(SIL OFL)
+          F=ios/Screenshots/out/fonts && mkdir -p $F
+          for f in GowunBatang-Bold GowunBatang-Regular; do
+            curl -fsSL --retry 3 -o $F/$f.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/gowunbatang/$f.ttf"
+          done
+          .venv/bin/python ios/Screenshots/frame.py ios/Screenshots/out/raw ios/Screenshots/out/framed \
+            $F ios/Screenshots/out/candidates
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: app-store-screenshots
+          path: |
+            ios/Screenshots/out/raw
+            ios/Screenshots/out/framed
+
+      # 최신 스크린샷을 screenshots 브랜치에 보관한다(이전 것은 덮어쓴다).
+      - name: Publish to screenshots branch
+        run: |
+          mkdir pub && cp -R ios/Screenshots/out/raw ios/Screenshots/out/framed pub/
+          cp ios/Screenshots/out/photos-contact-sheet.jpg pub/ 2>/dev/null || true
+          cd pub
+          git init -q -b screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          echo "run ${{ github.run_number }} · ${{ github.sha }}" > BUILD.txt
+          git add -A
+          git commit -qm "Screenshots ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" screenshots

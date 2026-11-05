@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct RootView: View {
     @EnvironmentObject var model: AppModel
+    @State private var demoShare: DemoShare?
 
     var body: some View {
         NavigationStack(path: $model.path) {
@@ -12,6 +13,21 @@ struct RootView: View {
         }
         .tint(Palette.onSurface)
         .toastHost()
+        .fullScreenCover(item: $demoShare) { d in
+            ShareEditor(entry: d.entry, note: d.entry.note, initialRatio: d.ratio, initialStyle: d.style)
+                .environmentObject(model)
+        }
+        .onAppear {
+            #if targetEnvironment(simulator)
+            // 스크린샷 자동 촬영용(시뮬레이터 전용): -PLShare <id> -PLShareStyle card|overlay|photo -PLShareRatio 0~3
+            let d = UserDefaults.standard
+            if let id = d.string(forKey: "PLShare"), let e = model.entry(id) {
+                let style = ShareStyle.allCases.first { "\($0)" == d.string(forKey: "PLShareStyle") } ?? .photo
+                let ratio = d.object(forKey: "PLShareRatio") == nil ? 2 : d.integer(forKey: "PLShareRatio")
+                demoShare = DemoShare(entry: e, ratio: ratio, style: style)
+            }
+            #endif
+        }
         .task {
             // 처음 실행 시 권한: 위치(카메라 사진 보완용), 사진 보관함(가져온 사진의 촬영 위치·날짜)
             await MainActor.run {
@@ -20,6 +36,13 @@ struct RootView: View {
             }
         }
     }
+}
+
+struct DemoShare: Identifiable {
+    let entry: LogEntry
+    let ratio: Int
+    let style: ShareStyle
+    var id: String { entry.id }
 }
 
 /* ② 시작 화면: 연·월·일 아코디언 + 사진 그리드 */

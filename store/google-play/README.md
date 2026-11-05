@@ -22,7 +22,7 @@ Play Console에 그대로 붙여넣을 수 있게 정리한 값. 괄호 안은 �
 | 휴대전화 스크린샷 | 실제 앱 화면 2~8장 (세로, 1080 × 1920 이상 권장) |
 | 카테고리 | 사진 |
 | 태그 | 사진, 일기, 라이프스타일 |
-| 이메일 | dup04205@gmail.com |
+| 이메일 | s.jin04205@gmail.com |
 | 웹사이트 | https://dup04205.github.io/photo-log/ |
 | 개인정보처리방침 | https://dup04205.github.io/photo-log/privacy.html |
 

@@ -14,6 +14,15 @@ final class AppModel: ObservableObject {
     @Published var path: [String] = []
     private var toastTask: Task<Void, Never>?
 
+    init() {
+        #if targetEnvironment(simulator)
+        // 스크린샷 자동 촬영용(시뮬레이터 전용): -PLOpen <기록 id> 로 상세 화면을 바로 연다
+        if let id = UserDefaults.standard.string(forKey: "PLOpen"), entries.contains(where: { $0.id == id }) {
+            path = [id]
+        }
+        #endif
+    }
+
     /// 날짜 최신순, 같은 날은 나중에 넣은 것이 먼저
     var byDay: [DayGroup] {
         let sorted = entries.sorted { $0.date != $1.date ? $0.date > $1.date : $0.created > $1.created }

@@ -13,7 +13,7 @@ private let ratios: [RatioOption] = [
 ]
 
 /// 공유 형식
-private enum ShareStyle: CaseIterable, Identifiable {
+enum ShareStyle: CaseIterable, Identifiable {
     case photo, overlay, card
     var id: Self { self }
     var label: String {
@@ -44,10 +44,12 @@ struct ShareEditor: View {
     @State private var stamp = true
     @State private var working = false
 
-    init(entry: LogEntry, note: String) {
+    init(entry: LogEntry, note: String, initialRatio: Int = 2, initialStyle: ShareStyle = .photo) {
         self.entry = entry
         self.note = note
         _sendText = State(initialValue: !note.isBlank)
+        _ratioIdx = State(initialValue: min(max(initialRatio, 0), ratios.count - 1))
+        _style = State(initialValue: note.isBlank ? .photo : initialStyle)
     }
 
     private var hasNote: Bool { !note.isBlank }
