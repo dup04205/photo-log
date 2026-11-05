@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -288,7 +287,6 @@ fun ListScreen(
     var addMenu by remember { mutableStateOf(false) }
     var shareFor by remember { mutableStateOf<Entry?>(null) }
     var editFor by remember { mutableStateOf<Entry?>(null) }
-    var settingsOpen by remember { mutableStateOf(false) }
     var deleteFor by remember { mutableStateOf<Entry?>(null) }
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("photolog", 0) }
@@ -312,11 +310,6 @@ fun ListScreen(
                             Icons.Filled.Menu,
                             contentDescription = if (showIndex) "날짜 메뉴 숨기기" else "날짜 메뉴 보기",
                         )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { settingsOpen = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "설정")
                     }
                 },
             )
@@ -416,7 +409,6 @@ fun ListScreen(
         )
     }
     editFor?.let { e -> ShareEditor(e, e.note) { editFor = null } }
-    if (settingsOpen) SettingsDialog { settingsOpen = false }
     deleteFor?.let { e ->
         DeleteDialog(
             onConfirm = { deleteFor = null; onDelete(e) },
@@ -605,7 +597,6 @@ fun DetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var shareOpen by remember { mutableStateOf(false) }
     var editOpen by remember { mutableStateOf(false) }
-    val settings = LocalSettings.current
 
     Scaffold(
         topBar = {
@@ -655,12 +646,10 @@ fun DetailScreen(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
                 )
-                if (settings.showStamp) {
-                    FilmDateStamp(
-                        entry.date,
-                        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp),
-                    )
-                }
+                FilmDateStamp(
+                    entry.date,
+                    Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp),
+                )
             }
             PlaceRow(entry)
             val noteLines = remember(note) { ShareImage.noteLineCount(note) }

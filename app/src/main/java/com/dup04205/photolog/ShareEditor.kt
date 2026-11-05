@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +82,6 @@ private enum class ShareStyle(val label: String) {
     CARD("사진 + 기록 카드"),
 }
 
-private const val LIMIT_NOTICE = "사진과 글을 합쳐서 공유할 때는 최대 5줄만 가능합니다."
 
 /**
  * 공유할 사진 크기 조절 화면.
@@ -91,7 +91,6 @@ private const val LIMIT_NOTICE = "사진과 글을 합쳐서 공유할 때는 �
 @Composable
 fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
-    val settings = LocalSettings.current
     val scope = rememberCoroutineScope()
 
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -105,9 +104,9 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
     val hasNote = note.isNotBlank()
     var style by remember { mutableStateOf(ShareStyle.PHOTO) }
     var sendText by remember { mutableStateOf(hasNote) }
-    var stamp by remember { mutableStateOf(settings.showStamp) }
+    var stamp by remember { mutableStateOf(true) }
     var working by remember { mutableStateOf(false) }
-    val noteInImage = hasNote && style != ShareStyle.PHOTO
+    val density = LocalDensity.current
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -190,8 +189,8 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                                     note,
                                     color = Color(0xFF111111),
                                     fontFamily = NoteFont,
-                                    fontSize = (cw.value * 0.035f).sp,
-                                    lineHeight = (cw.value * 0.049f).sp,
+                                    fontSize = with(density) { (cw * 0.035f).toSp() },
+                                    lineHeight = with(density) { (cw * 0.049f).toSp() },
                                     maxLines = ShareImage.MAX_NOTE_LINES,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(top = cw * 0.05f),
@@ -213,7 +212,7 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                                     foot,
                                     color = Color(0xFF8A8F98),
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = (cw.value * 0.024f).sp,
+                                    fontSize = with(density) { (cw * 0.024f).toSp() },
                                     maxLines = 1,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -223,7 +222,7 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                                     fontFamily = TitleFont,
                                     fontStyle = FontStyle.Italic,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = (cw.value * 0.029f).sp,
+                                    fontSize = with(density) { (cw * 0.029f).toSp() },
                                 )
                             }
                         }
@@ -263,22 +262,12 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                                         style = st
                                         zoom = 1f
                                         offset = Offset.Zero
-                                        if (st != ShareStyle.PHOTO) {
-                                            Toast.makeText(ctx, LIMIT_NOTICE, Toast.LENGTH_SHORT).show()
-                                        }
                                     }
                                 },
                                 label = { Text(st.label) },
                             )
                         }
                     }
-                    Text(
-                        if (!hasNote) "저장된 기록이 없어 사진만 공유할 수 있습니다"
-                        else if (noteInImage) LIMIT_NOTICE
-                        else "사진에 기록을 넣으려면 형식을 고릅니다",
-                        fontSize = 12.sp,
-                        color = if (noteInImage) Stamp else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     SettingSwitch(
                         title = "기록을 글로 함께 보내기",
                         sub = "카카오톡·메시지에는 글로 붙고, 인스타그램용으로 클립보드에도 복사합니다",
@@ -349,6 +338,7 @@ private fun PhotoFrame(
     stamp: Boolean,
     overlayNote: String?,
 ) {
+    val density = LocalDensity.current
     Box(
         Modifier
             .size(w, h)
@@ -393,8 +383,8 @@ private fun PhotoFrame(
                     overlayNote,
                     color = Color.White,
                     fontFamily = NoteFont,
-                    fontSize = (w.value * 0.035f).sp,
-                    lineHeight = (w.value * 0.049f).sp,
+                    fontSize = with(density) { (w * 0.035f).toSp() },
+                    lineHeight = with(density) { (w * 0.049f).toSp() },
                     maxLines = ShareImage.MAX_NOTE_LINES,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -406,7 +396,7 @@ private fun PhotoFrame(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = w * 0.045f, bottom = w * 0.025f),
-                fontSize = (w.value * 0.03f).sp,
+                fontSize = with(density) { (w * 0.03f).toSp() },
             )
         }
     }

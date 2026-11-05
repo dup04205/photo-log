@@ -23,46 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 앱 설정. 폰 안의 SharedPreferences에 저장한다. */
-class AppSettings(context: Context) {
-    private val prefs = context.getSharedPreferences("photolog", Context.MODE_PRIVATE)
-
-    /** 필름카메라 날짜 각인 표시 (상세 화면 + 공유 이미지 기본값) */
-    var showStamp by mutableStateOf(prefs.getBoolean(KEY_STAMP, true))
-        private set
-
-    fun updateShowStamp(on: Boolean) {
-        showStamp = on
-        prefs.edit().putBoolean(KEY_STAMP, on).apply()
-    }
-
-    private companion object {
-        const val KEY_STAMP = "showStamp"
-    }
-}
-
-val LocalSettings = staticCompositionLocalOf<AppSettings> { error("AppSettings not provided") }
-
-@Composable
-fun SettingsDialog(onDismiss: () -> Unit) {
-    val settings = LocalSettings.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("설정") },
-        text = {
-            Column {
-                SettingSwitch(
-                    title = "필름카메라 날짜 표시",
-                    sub = "사진 화면과 공유 이미지에 '26 11 05 형식의 날짜 각인을 넣습니다",
-                    checked = settings.showStamp,
-                    onChange = { settings.updateShowStamp(it) },
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
-    )
-}
-
+/** 스위치 한 줄(제목 + 설명 + 스위치). 공유 화면의 옵션에 쓴다. */
 @Composable
 fun SettingSwitch(
     title: String,
