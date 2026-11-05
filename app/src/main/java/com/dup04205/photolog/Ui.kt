@@ -768,7 +768,7 @@ private fun ShareDialog(entry: Entry, note: String, onDismiss: () -> Unit, onEdi
                 ShareOption("크기 조절해서 공유", "비율(1:1 · 4:5 · 9:16)과 보낼 부분을 고르고 기록과 함께") {
                     onEdit()
                 }
-                ShareOption("원본 그대로 공유", "사진 파일 + 기록 글") {
+                ShareOption("원본 그대로 공유", "사진 파일 + 기록 글 · 사진 속 위치 정보도 함께 전달됩니다") {
                     onDismiss()
                     Sharing.send(ctx, Uri.parse(entry.uri), entry, note)
                 }

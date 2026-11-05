@@ -12,24 +12,33 @@ android {
         applicationId = "com.dup04205.photolog"
         minSdk = 29
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.9"
+        versionCode = 10
+        versionName = "0.9.1"
     }
 
-    // 빌드마다 같은 키로 서명해야 폰에서 앱을 지우지 않고 업데이트할 수 있다.
+    // 서명 키는 저장소에 두지 않는다. GitHub Actions가 Secrets에서 app/release.keystore를 복원하고
+    // 비밀번호는 환경 변수 SIGNING_PASSWORD로 받는다. 같은 키로 서명해야 덮어 설치(업데이트)가 된다.
+    // 키가 없는 로컬 빌드는 안드로이드 기본 디버그 키로 서명된다.
+    val releaseKeystore = file("release.keystore")
+    val signingPassword = System.getenv("SIGNING_PASSWORD")
+    val hasReleaseKey = releaseKeystore.exists() && !signingPassword.isNullOrEmpty()
+
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        create("release") {
+            if (hasReleaseKey) {
+                storeFile = releaseKeystore
+                storePassword = signingPassword
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = signingPassword
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release")
+            else signingConfigs.getByName("debug")
         }
     }
     compileOptions {

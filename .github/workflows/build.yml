@@ -12,21 +12,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      # 외부 Actions는 태그가 바뀌어도 영향이 없도록 커밋 해시로 고정한다 (모두 v4).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+
+      # 서명 키는 저장소가 아니라 GitHub Secrets에만 둔다.
+      - name: Restore signing key
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$SIGNING_KEYSTORE_B64" ]; then
+            echo "::error::SIGNING_KEYSTORE_B64 secret이 없습니다. 저장소 Settings > Secrets and variables > Actions에 등록하세요."
+            exit 1
+          fi
+          echo "$SIGNING_KEYSTORE_B64" | base64 -d > app/release.keystore
+
       - name: Build
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk PHOTO-LOG.apk
-      - uses: actions/upload-artifact@v4
+          rm -f app/release.keystore
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: photo-log-apk
           path: PHOTO-LOG.apk
+
       # 최신 APK를 apk 브랜치에 한 파일로 보관한다(이전 빌드는 덮어쓴다).
       - name: Publish APK to apk branch
         run: |
