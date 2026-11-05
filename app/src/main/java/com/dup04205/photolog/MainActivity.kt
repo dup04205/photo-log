@@ -44,6 +44,9 @@ val IndexFont = FontFamily(
     Font(R.font.gowun_batang_bold, FontWeight.Bold),
 )
 
+/** 필름카메라 날짜 각인: 7세그먼트 이탤릭(DSEG7 Classic) */
+val StampFont = FontFamily(Font(R.font.dseg7_classic_italic))
+
 /** 메모: 폰의 시스템 글꼴을 그대로 따른다(삼성 글꼴 스타일 등 포함). */
 val NoteFont = FontFamily.Default
 

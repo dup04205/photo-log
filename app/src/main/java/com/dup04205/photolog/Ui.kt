@@ -76,6 +76,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -569,12 +571,9 @@ fun DetailScreen(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
                 )
-                Text(
-                    stampOf(entry.date),
-                    color = Stamp,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 15.sp,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                FilmDateStamp(
+                    entry.date,
+                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 14.dp),
                 )
             }
             PlaceRow(entry)
@@ -619,6 +618,25 @@ fun DetailScreen(
     }
     if (shareOpen) ShareDialog(entry, note.trim()) { shareOpen = false }
 }
+
+/** 필름카메라 날짜 각인: '26 11 05 를 주황 7세그먼트 숫자 + 빛 번짐으로 */
+@Composable
+private fun FilmDateStamp(date: String, modifier: Modifier = Modifier) {
+    Text(
+        stampOf(date),
+        modifier = modifier,
+        style = TextStyle(
+            color = FilmOrange,
+            fontFamily = StampFont,
+            fontSize = 18.sp,
+            letterSpacing = 1.sp,
+            shadow = Shadow(color = FilmGlow, blurRadius = 14f),
+        ),
+    )
+}
+
+private val FilmOrange = Color(0xFFFF7A1A)
+private val FilmGlow = Color(0xCCFF5A00)
 
 @Composable
 private fun DeleteDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {

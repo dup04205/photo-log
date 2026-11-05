@@ -17,6 +17,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.content.res.ResourcesCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -83,13 +84,18 @@ object ShareCard {
             c.drawBitmap(src, srcRect, RectF(p, p, p + pw, p + ph), Paint(Paint.FILTER_BITMAP_FLAG))
 
             val stamp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFFFF8A3D.toInt()
-                textSize = 34f
-                typeface = Typeface.MONOSPACE
+                color = 0xFFFF7A1A.toInt()
+                textSize = 40f
+                typeface = try {
+                    ResourcesCompat.getFont(ctx, R.font.dseg7_classic_italic)
+                } catch (_: Exception) {
+                    null
+                } ?: Typeface.MONOSPACE
                 textAlign = Paint.Align.RIGHT
-                setShadowLayer(10f, 0f, 0f, 0x99FF7828.toInt())
+                letterSpacing = 0.06f
+                setShadowLayer(14f, 0f, 0f, 0xCCFF5A00.toInt())
             }
-            c.drawText(stampOf(e.date), p + pw - 26f, p + ph - 26f, stamp)
+            c.drawText(stampOf(e.date), p + pw - 32f, p + ph - 30f, stamp)
 
             if (note.isNotBlank()) {
                 val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
