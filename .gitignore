@@ -9,3 +9,11 @@ local.properties
 *.keystore
 *.jks
 signing*.txt
+
+# iOS: 프로젝트 파일은 XcodeGen으로 만든다
+ios/PhotoLog.xcodeproj/
+ios/PhotoLog/Info.plist
+ios/build/
+ios/Payload/
+*.ipa
+xcuserdata/

@@ -1,0 +1,67 @@
+name: Build iOS
+
+# ios/ 폴더가 바뀌면 서명 없는 IPA를 빌드한다.
+# 설치할 때 Sideloadly·AltStore가 본인 Apple ID로 서명해 준다(ios/README.md 참고).
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      # 외부 Actions는 태그가 바뀌어도 영향이 없도록 커밋 해시로 고정한다 (모두 v4).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          cd ios
+          xcodebuild -version
+          if ! xcodebuild \
+              -project PhotoLog.xcodeproj -scheme PhotoLog -configuration Release \
+              -sdk iphoneos -destination 'generic/platform=iOS' \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              build > build.log 2>&1; then
+            echo "::error::빌드 실패: $(grep -E 'error:' build.log | head -20 | tr '\n' ' ' | cut -c1-1500)"
+            grep -E 'error:|warning: unre' build.log | head -60
+            tail -40 build.log
+            exit 1
+          fi
+          grep -c 'warning:' build.log | xargs -I{} echo "경고 {}개"
+          tail -3 build.log
+
+      - name: Package IPA
+        run: |
+          cd ios
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/PhotoLog.app Payload/
+          zip -qry ../PHOTO-LOG.ipa Payload
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: photo-log-ipa
+          path: PHOTO-LOG.ipa
+
+      # 최신 IPA를 ipa 브랜치에 한 파일로 보관한다(이전 빌드는 덮어쓴다).
+      - name: Publish IPA to ipa branch
+        run: |
+          mkdir out && cp PHOTO-LOG.ipa out/
+          cd out
+          git init -q -b ipa
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          echo "build ${{ github.run_number }} · ${{ github.sha }}" > BUILD.txt
+          git add PHOTO-LOG.ipa BUILD.txt
+          git commit -qm "IPA build ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" ipa

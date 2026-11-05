@@ -40,6 +40,9 @@
 - Kotlin + Jetpack Compose (Material 3), minSdk 29(안드로이드 10)
 - `Entry.kt` 데이터·저장소, `PhotoStore.kt` 폴더 저장·EXIF, `Sharing.kt` 공유·카드, `Ui.kt` 화면
 
+## iOS
+같은 기능의 iPhone 앱이 `ios/` 폴더에 있다. 빌드·설치 방법은 [ios/README.md](ios/README.md). 백업 zip은 두 앱이 서로 불러올 수 있다.
+
 ## 버전
 버전별 변경 내용과 각 시점의 코드는 [CHANGELOG.md](CHANGELOG.md)에 있다.
 

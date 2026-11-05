@@ -3,6 +3,8 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # iOS 쪽만 바뀐 커밋에서는 APK를 다시 빌드하지 않는다
+    paths-ignore: ["ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
 
 permissions:
