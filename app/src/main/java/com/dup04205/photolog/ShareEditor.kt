@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.displayCutoutPadding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -119,9 +121,10 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxSize()
-                    .systemBarsPadding()
-                    .displayCutoutPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    // 기기마다 내비게이션 바 높이가 달라도 버튼이 가려지지 않도록 아래 여백을 넉넉히 둔다
+                    .padding(bottom = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -243,7 +246,9 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                 )
 
                 Column(
-                    Modifier.verticalScroll(rememberScrollState()),
+                    Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -322,8 +327,10 @@ fun ShareEditor(entry: Entry, note: String, onDismiss: () -> Unit) {
                         }
                     },
                     enabled = bmp != null && !working,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (working) "만드는 중…" else "공유") }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) { Text(if (working) "만드는 중…" else "공유", fontSize = 16.sp) }
             }
         }
     }
