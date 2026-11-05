@@ -123,7 +123,7 @@ fun PhotoLogApp() {
         }
     }
 
-    /** 갤러리·Google 포토·드라이브 등에서 고른 사진(여러 장 가능)을 PHOTO-LOG 폴더로 복사한다. */
+    /** 갤러리·Google 포토에서 고른 사진(여러 장 가능)을 PHOTO-LOG 폴더로 복사한다. */
     fun importMany(uris: List<Uri>) {
         if (uris.isEmpty()) return
         scope.launch {
@@ -183,11 +183,6 @@ fun PhotoLogApp() {
     // 갤러리(기기 사진): 여러 장 선택
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris -> importMany(uris) }
-
-    // 파일·클라우드: Google 드라이브, OneDrive, Dropbox 등 폰에 설치된 저장소가 모두 뜬다
-    val files = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()
     ) { uris -> importMany(uris) }
 
     // Google 포토 앱으로 바로 열기 (클라우드에만 있는 사진도 내려받아 가져온다)
@@ -258,7 +253,6 @@ fun PhotoLogApp() {
                     }
                 }
             } else null,
-            onFiles = { files.launch(arrayOf("image/*")) },
         )
     }
 }
@@ -274,7 +268,6 @@ fun ListScreen(
     onCamera: () -> Unit,
     onPick: () -> Unit,
     onGooglePhotos: (() -> Unit)?,
-    onFiles: () -> Unit,
 ) {
     val sorted = entries.sortedWith(
         compareByDescending<Entry> { it.date }.thenByDescending { it.created }
@@ -339,10 +332,6 @@ fun ListScreen(
                             onClick = { addMenu = false; onGooglePhotos() },
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("드라이브·파일에서 가져오기") },
-                        onClick = { addMenu = false; onFiles() },
-                    )
                 }
             }
         },
