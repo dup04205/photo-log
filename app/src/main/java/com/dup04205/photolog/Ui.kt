@@ -1,0 +1,612 @@
+package com.dup04205.photolog
+
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
+
+@Composable
+fun PhotoLogApp() {
+    val ctx = LocalContext.current
+    val repo = remember { EntryRepo(ctx.applicationContext) }
+    val entries = remember { mutableStateListOf<Entry>().apply { addAll(repo.load()) } }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCamera by rememberSaveable { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun persist() = repo.save(entries.toList())
+
+    fun addEntry(uri: Uri, info: PhotoInfo) {
+        val now = System.currentTimeMillis()
+        val e = Entry(
+            id = "p$now", uri = uri.toString(), date = info.date, note = "",
+            lat = info.lat, lon = info.lon, created = now,
+        )
+        entries.add(e)
+        persist()
+        selectedId = e.id
+        val msg = if (e.lat != null) "사진 폴더에 저장하고 촬영 위치를 기록했습니다"
+        else "사진 폴더에 저장했습니다 (위치 정보 없음)"
+        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    val permissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+    LaunchedEffect(Unit) { permissions.launch(PhotoStore.wantedPermissions()) }
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val u = pendingCamera?.let { Uri.parse(it) }
+        pendingCamera = null
+        if (u == null) return@rememberLauncherForActivityResult
+        if (!ok) {
+            PhotoStore.discard(ctx, u)
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            busy = true
+            val info = withContext(Dispatchers.IO) { PhotoStore.finishCapture(ctx, u) }
+            busy = false
+            addEntry(u, info)
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { src ->
+        if (src == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            val r = withContext(Dispatchers.IO) { PhotoStore.importFrom(ctx, src) }
+            busy = false
+            if (r == null) Toast.makeText(ctx, "사진을 가져오지 못했습니다", Toast.LENGTH_SHORT).show()
+            else addEntry(r.first, r.second)
+        }
+    }
+
+    val selected = entries.firstOrNull { it.id == selectedId }
+    if (selected != null) {
+        BackHandler { selectedId = null }
+        DetailScreen(
+            entry = selected,
+            onBack = { selectedId = null },
+            onSave = { note ->
+                val i = entries.indexOfFirst { it.id == selected.id }
+                if (i >= 0) {
+                    entries[i] = entries[i].copy(note = note)
+                    persist()
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    val removed = withContext(Dispatchers.IO) {
+                        PhotoStore.delete(ctx, Uri.parse(selected.uri))
+                    }
+                    entries.removeAll { it.id == selected.id }
+                    persist()
+                    selectedId = null
+                    val msg = if (removed) "삭제했습니다"
+                    else "기록을 삭제했습니다. 폴더의 사진은 갤러리에서 지워 주세요"
+                    Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+    } else {
+        ListScreen(
+            entries = entries,
+            busy = busy,
+            onOpen = { selectedId = it },
+            onCamera = {
+                val u = PhotoStore.newImageUri(ctx)
+                if (u == null) {
+                    Toast.makeText(ctx, "사진 폴더를 만들 수 없습니다", Toast.LENGTH_SHORT).show()
+                } else {
+                    pendingCamera = u.toString()
+                    try {
+                        camera.launch(u)
+                    } catch (_: ActivityNotFoundException) {
+                        PhotoStore.discard(ctx, u)
+                        pendingCamera = null
+                        Toast.makeText(ctx, "카메라 앱을 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onPick = { picker.launch("image/*") },
+        )
+    }
+}
+
+/* ② 시작 화면: 연·월·일 아코디언 + 사진 그리드 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ListScreen(
+    entries: List<Entry>,
+    busy: Boolean,
+    onOpen: (String) -> Unit,
+    onCamera: () -> Unit,
+    onPick: () -> Unit,
+) {
+    val sorted = entries.sortedWith(
+        compareByDescending<Entry> { it.date }.thenByDescending { it.created }
+    )
+    val byDay = sorted.groupBy { it.date }
+    val headerIndex = LinkedHashMap<String, Int>()
+    var idx = 0
+    byDay.forEach { (d, list) ->
+        headerIndex[d] = idx
+        idx += 1 + list.size
+    }
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    var addMenu by remember { mutableStateOf(false) }
+
+    fun jump(prefix: String) {
+        val i = headerIndex.entries.firstOrNull { it.key.startsWith(prefix) }?.value ?: return
+        scope.launch { gridState.animateScrollToItem(i) }
+    }
+
+    Scaffold(
+        topBar = { CenterAlignedTopAppBar(title = { Logo() }) },
+        floatingActionButton = {
+            Box {
+                ExtendedFloatingActionButton(
+                    onClick = { addMenu = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("사진 추가") },
+                )
+                DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("카메라로 찍기") },
+                        onClick = { addMenu = false; onCamera() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("앨범에서 가져오기") },
+                        onClick = { addMenu = false; onPick() },
+                    )
+                }
+            }
+        },
+    ) { pad ->
+        Column(Modifier.padding(pad).fillMaxSize()) {
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxSize()) {
+                DateIndex(byDay, onJump = { jump(it) })
+                VerticalDivider()
+                if (sorted.isEmpty()) {
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight().padding(24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "아직 사진이 없습니다.\n아래 ＋ 사진 추가로 첫 기록을 남겨 보세요.\n사진은 사진/PHOTO-LOG 폴더에 저장됩니다.",
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 14.sp,
+                            lineHeight = 22.sp,
+                        )
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        state = gridState,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 96.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        byDay.forEach { (day, list) ->
+                            item(key = "h-$day", span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    day.replace('-', '.'),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 2.dp),
+                                )
+                            }
+                            items(list, key = { it.id }) { e -> Tile(e) { onOpen(e.id) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Logo() {
+    Text(
+        "PHOTO-LOG",
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 3.sp,
+        fontSize = 18.sp,
+    )
+}
+
+/* ③ 연 → 월 → 일 아코디언 메뉴 */
+@Composable
+fun DateIndex(days: Map<String, List<Entry>>, onJump: (String) -> Unit) {
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val years = days.keys.groupBy { it.substring(0, 4) }
+    Column(
+        Modifier
+            .width(112.dp)
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 6.dp, vertical = 8.dp)
+    ) {
+        Text(
+            "연 · 월 · 일",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(6.dp),
+        )
+        years.entries.forEachIndexed { yi, (year, yearDays) ->
+            val yOpen = expanded[year] ?: (yi == 0)
+            IndexRow(
+                label = "${if (yOpen) "▾" else "▸"} $year",
+                count = yearDays.sumOf { days[it]?.size ?: 0 },
+                indent = 0,
+                bold = true,
+            ) { expanded[year] = !yOpen }
+            if (yOpen) {
+                val months = yearDays.groupBy { it.substring(5, 7) }
+                months.entries.forEachIndexed { mi, (month, monthDays) ->
+                    val key = "$year-$month"
+                    val mOpen = expanded[key] ?: (yi == 0 && mi == 0)
+                    IndexRow(
+                        label = "${if (mOpen) "▾" else "▸"} ${month.toInt()}월",
+                        count = monthDays.sumOf { days[it]?.size ?: 0 },
+                        indent = 10,
+                    ) {
+                        expanded[key] = !mOpen
+                        onJump(key)
+                    }
+                    if (mOpen) {
+                        monthDays.forEach { d ->
+                            IndexRow(
+                                label = d.substring(5).replace('-', '.'),
+                                count = days[d]?.size ?: 0,
+                                indent = 22,
+                                mono = true,
+                            ) { onJump(d) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IndexRow(
+    label: String,
+    count: Int,
+    indent: Int,
+    bold: Boolean = false,
+    mono: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(start = (6 + indent).dp, end = 4.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.weight(1f),
+            fontSize = if (bold) 14.sp else 13.sp,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+            maxLines = 1,
+        )
+        Text(
+            "$count",
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun Tile(e: Entry, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = Uri.parse(e.uri),
+            contentDescription = "${e.date} 사진",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (e.lat != null) {
+            Icon(
+                Icons.Filled.LocationOn,
+                contentDescription = "위치 있음",
+                tint = Color.White,
+                modifier = Modifier.align(Alignment.TopStart).padding(3.dp).size(14.dp),
+            )
+        }
+        if (e.note.isNotBlank()) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(5.dp)
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(Stamp)
+            )
+        }
+    }
+}
+
+/* ① 상세 화면: 사진 · 위치 · 기록 · 저장 · 공유 · ⋯ 삭제 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DetailScreen(
+    entry: Entry,
+    onBack: () -> Unit,
+    onSave: (String) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var note by rememberSaveable(entry.id) { mutableStateOf(entry.note) }
+    var menu by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var shareOpen by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Logo() },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "목록으로")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "설정")
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("삭제", color = MaterialTheme.colorScheme.error) },
+                                onClick = { menu = false; confirmDelete = true },
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    ) { pad ->
+        Column(
+            Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.Black)
+            ) {
+                AsyncImage(
+                    model = Uri.parse(entry.uri),
+                    contentDescription = "${entry.date} 사진",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                )
+                Text(
+                    stampOf(entry.date),
+                    color = Stamp,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 15.sp,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                )
+            }
+            PlaceRow(entry)
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("기록") },
+                placeholder = { Text("이 사진에 남길 이야기를 적어 두세요.") },
+                minLines = 6,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                OutlinedButton(onClick = { shareOpen = true }) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("공유")
+                }
+                Button(
+                    onClick = {
+                        onSave(note.trim())
+                        Toast.makeText(ctx, "저장했습니다", Toast.LENGTH_SHORT).show()
+                    },
+                    enabled = note.trim() != entry.note,
+                ) { Text("저장") }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("삭제") },
+            text = { Text("이 사진과 기록을 삭제합니다. 사진/PHOTO-LOG 폴더의 파일도 함께 지워지며 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("취소") } },
+        )
+    }
+
+    if (shareOpen) {
+        val trimmed = note.trim()
+        AlertDialog(
+            onDismissRequest = { shareOpen = false },
+            title = { Text("공유하기") },
+            text = {
+                Column {
+                    ShareOption("사진 + 메모 카드", "인스타그램 피드 비율(4:5) 카드 이미지") {
+                        shareOpen = false
+                        scope.launch {
+                            val u = withContext(Dispatchers.IO) { ShareCard.render(ctx, entry, trimmed) }
+                            if (u != null) Sharing.send(ctx, u, entry, trimmed)
+                            else Toast.makeText(ctx, "카드를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    ShareOption("사진만", "원본 사진 + 메모 글") {
+                        shareOpen = false
+                        Sharing.send(ctx, Uri.parse(entry.uri), entry, trimmed)
+                    }
+                    ShareOption("메모 복사", "메모 · 날짜 · 지도 링크") {
+                        shareOpen = false
+                        Sharing.copy(ctx, Sharing.text(entry, trimmed))
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { shareOpen = false }) { Text("닫기") } },
+        )
+    }
+}
+
+@Composable
+private fun PlaceRow(e: Entry) {
+    val ctx = LocalContext.current
+    val lat = e.lat
+    val lon = e.lon
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            Icons.Filled.LocationOn,
+            contentDescription = null,
+            tint = if (lat != null) Stamp else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        if (lat != null && lon != null) {
+            Text(
+                String.format(Locale.US, "%.5f, %.5f", lat, lon),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { Sharing.openMap(ctx, lat, lon) }) { Text("지도에서 보기") }
+        } else {
+            Text(
+                "이 사진에는 위치 정보가 없습니다",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShareOption(title: String, sub: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp)
+    ) {
+        Text(title, fontWeight = FontWeight.Medium)
+        Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
