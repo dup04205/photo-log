@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -89,6 +90,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -285,6 +287,8 @@ fun ListScreen(
     val scope = rememberCoroutineScope()
     var addMenu by remember { mutableStateOf(false) }
     var shareFor by remember { mutableStateOf<Entry?>(null) }
+    var editFor by remember { mutableStateOf<Entry?>(null) }
+    var settingsOpen by remember { mutableStateOf(false) }
     var deleteFor by remember { mutableStateOf<Entry?>(null) }
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("photolog", 0) }
@@ -308,6 +312,11 @@ fun ListScreen(
                             Icons.Filled.Menu,
                             contentDescription = if (showIndex) "날짜 메뉴 숨기기" else "날짜 메뉴 보기",
                         )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { settingsOpen = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "설정")
                     }
                 },
             )
@@ -398,7 +407,16 @@ fun ListScreen(
         }
     }
 
-    shareFor?.let { e -> ShareDialog(e, e.note) { shareFor = null } }
+    shareFor?.let { e ->
+        ShareDialog(
+            entry = e,
+            note = e.note,
+            onDismiss = { shareFor = null },
+            onEdit = { shareFor = null; editFor = e },
+        )
+    }
+    editFor?.let { e -> ShareEditor(e, e.note) { editFor = null } }
+    if (settingsOpen) SettingsDialog { settingsOpen = false }
     deleteFor?.let { e ->
         DeleteDialog(
             onConfirm = { deleteFor = null; onDelete(e) },
@@ -586,6 +604,8 @@ fun DetailScreen(
     var menu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var shareOpen by remember { mutableStateOf(false) }
+    var editOpen by remember { mutableStateOf(false) }
+    val settings = LocalSettings.current
 
     Scaffold(
         topBar = {
@@ -635,10 +655,12 @@ fun DetailScreen(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
                 )
-                FilmDateStamp(
-                    entry.date,
-                    Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 14.dp),
-                )
+                if (settings.showStamp) {
+                    FilmDateStamp(
+                        entry.date,
+                        Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp),
+                    )
+                }
             }
             PlaceRow(entry)
             OutlinedTextField(
@@ -680,21 +702,29 @@ fun DetailScreen(
             onDismiss = { confirmDelete = false },
         )
     }
-    if (shareOpen) ShareDialog(entry, note.trim()) { shareOpen = false }
+    if (shareOpen) {
+        ShareDialog(
+            entry = entry,
+            note = note.trim(),
+            onDismiss = { shareOpen = false },
+            onEdit = { shareOpen = false; editOpen = true },
+        )
+    }
+    if (editOpen) ShareEditor(entry, note.trim()) { editOpen = false }
 }
 
 /** 필름카메라 날짜 각인: '26 11 05 를 주황 7세그먼트 숫자 + 빛 번짐으로 */
 @Composable
-private fun FilmDateStamp(date: String, modifier: Modifier = Modifier) {
+fun FilmDateStamp(date: String, modifier: Modifier = Modifier, fontSize: TextUnit = 13.sp) {
     Text(
         stampOf(date),
         modifier = modifier,
         style = TextStyle(
             color = FilmOrange,
             fontFamily = StampFont,
-            fontSize = 18.sp,
-            letterSpacing = 1.sp,
-            shadow = Shadow(color = FilmGlow, blurRadius = 14f),
+            fontSize = fontSize,
+            letterSpacing = (fontSize.value * 0.06f).sp,
+            shadow = Shadow(color = FilmGlow, blurRadius = fontSize.value * 0.8f),
         ),
     )
 }
@@ -716,27 +746,21 @@ private fun DeleteDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ShareDialog(entry: Entry, note: String, onDismiss: () -> Unit) {
+private fun ShareDialog(entry: Entry, note: String, onDismiss: () -> Unit, onEdit: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("공유하기") },
         text = {
             Column {
-                ShareOption("사진 + 메모 카드", "인스타그램 피드 비율(4:5) 카드 이미지") {
-                    scope.launch {
-                        val u = withContext(Dispatchers.IO) { ShareCard.render(ctx, entry, note) }
-                        onDismiss()
-                        if (u != null) Sharing.send(ctx, u, entry, note)
-                        else Toast.makeText(ctx, "카드를 만들지 못했습니다", Toast.LENGTH_SHORT).show()
-                    }
+                ShareOption("크기 조절해서 공유", "비율(1:1 · 4:5 · 9:16)과 보낼 부분을 고르고 기록과 함께") {
+                    onEdit()
                 }
-                ShareOption("사진만", "원본 사진 + 메모 글") {
+                ShareOption("원본 그대로 공유", "사진 파일 + 기록 글") {
                     onDismiss()
                     Sharing.send(ctx, Uri.parse(entry.uri), entry, note)
                 }
-                ShareOption("메모 복사", "메모 · 날짜 · 지도 링크") {
+                ShareOption("기록 복사", "기록 · 날짜 · 지도 링크") {
                     onDismiss()
                     Sharing.copy(ctx, Sharing.text(entry, note))
                 }

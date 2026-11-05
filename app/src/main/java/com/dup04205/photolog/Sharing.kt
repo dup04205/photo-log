@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
 import android.text.StaticLayout
@@ -20,7 +22,7 @@ import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import java.io.File
 import java.io.FileOutputStream
-import java.util.Locale
+import kotlin.math.roundToInt
 
 object Sharing {
     fun text(e: Entry, note: String): String = buildList {
@@ -32,11 +34,13 @@ object Sharing {
     }.joinToString("\n")
 
     /** 안드로이드 공유 메뉴를 연다. 인스타그램·카카오톡·메시지 등이 여기에 뜬다. */
-    fun send(ctx: Context, image: Uri, e: Entry, note: String) {
+    fun send(ctx: Context, image: Uri, e: Entry, note: String) = sendImage(ctx, image, text(e, note))
+
+    fun sendImage(ctx: Context, image: Uri, text: String?) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/jpeg"
             putExtra(Intent.EXTRA_STREAM, image)
-            putExtra(Intent.EXTRA_TEXT, text(e, note))
+            if (!text.isNullOrBlank()) putExtra(Intent.EXTRA_TEXT, text)
             clipData = ClipData.newRawUri("", image)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
@@ -60,81 +64,76 @@ object Sharing {
     }
 }
 
-/** 인스타그램 피드 비율(4:5, 1080x1350) 공유 카드: 사진 + 날짜 스탬프 + 메모 + 날짜·좌표 */
-object ShareCard {
-    fun render(ctx: Context, e: Entry, note: String): Uri? {
+/** 공유 이미지: 고른 비율로 자른 사진 + (선택) 기록 글 + (선택) 필름카메라 날짜. 가로 1080px. */
+object ShareImage {
+    fun render(
+        ctx: Context,
+        src: Bitmap,
+        crop: RectF,
+        ratio: Float,
+        e: Entry,
+        overlayNote: String,
+        stamp: Boolean,
+    ): Uri? {
         return try {
-            val src = PhotoStore.loadBitmap(ctx, Uri.parse(e.uri), 1600) ?: return null
             val w = 1080
-            val h = 1350
-            val p = 72f
-            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val c = Canvas(bmp)
-            c.drawColor(0xFFF7F7F5.toInt())
-
-            val pw = w - 2 * p
-            val ph = if (note.isNotBlank()) 820f else 1080f
-            val s = maxOf(pw / src.width, ph / src.height)
-            val sw = pw / s
-            val sh = ph / s
+            val h = (w / ratio).roundToInt()
+            val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val c = Canvas(out)
+            c.drawColor(0xFF000000.toInt())
             val srcRect = Rect(
-                ((src.width - sw) / 2).toInt(), ((src.height - sh) / 2).toInt(),
-                ((src.width + sw) / 2).toInt(), ((src.height + sh) / 2).toInt(),
+                crop.left.roundToInt(), crop.top.roundToInt(),
+                crop.right.roundToInt(), crop.bottom.roundToInt(),
             )
-            c.drawBitmap(src, srcRect, RectF(p, p, p + pw, p + ph), Paint(Paint.FILTER_BITMAP_FLAG))
+            c.drawBitmap(src, srcRect, Rect(0, 0, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
 
-            val stamp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFFFF7A1A.toInt()
-                textSize = 40f
-                typeface = try {
-                    ResourcesCompat.getFont(ctx, R.font.dseg7_classic_italic)
-                } catch (_: Exception) {
-                    null
-                } ?: Typeface.MONOSPACE
-                textAlign = Paint.Align.RIGHT
-                letterSpacing = 0.06f
-                setShadowLayer(14f, 0f, 0f, 0xCCFF5A00.toInt())
-            }
-            c.drawText(stampOf(e.date), p + pw - 32f, p + ph - 30f, stamp)
-
-            if (note.isNotBlank()) {
+            var bottom = h.toFloat()
+            if (overlayNote.isNotBlank()) {
+                val pad = w * 0.05f
                 val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = 0xFF1B1E24.toInt()
-                    textSize = 38f
+                    color = 0xFFFFFFFF.toInt()
+                    textSize = w * 0.035f
                 }
-                val layout = StaticLayout.Builder.obtain(note, 0, note.length, tp, pw.toInt())
-                    .setLineSpacing(16f, 1f)
-                    .setMaxLines(if (e.lat != null) 5 else 6)
+                val layout = StaticLayout.Builder
+                    .obtain(overlayNote, 0, overlayNote.length, tp, (w - 2 * pad).toInt())
+                    .setLineSpacing(w * 0.014f, 1f)
+                    .setMaxLines(4)
                     .setEllipsize(TextUtils.TruncateAt.END)
                     .build()
+                val top = h - (layout.height + pad * 2)
+                val shade = Paint().apply {
+                    shader = LinearGradient(
+                        0f, top, 0f, h.toFloat(),
+                        0x00000000, 0xB3000000.toInt(), Shader.TileMode.CLAMP,
+                    )
+                }
+                c.drawRect(0f, top, w.toFloat(), h.toFloat(), shade)
                 c.save()
-                c.translate(p, p + ph + 40f)
+                c.translate(pad, top + pad)
                 layout.draw(c)
                 c.restore()
+                bottom = top
             }
 
-            val foot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF8A8F98.toInt()
-                textSize = 26f
-                typeface = Typeface.MONOSPACE
+            if (stamp) {
+                val sp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFFF7A1A.toInt()
+                    textSize = w * 0.03f
+                    typeface = try {
+                        ResourcesCompat.getFont(ctx, R.font.dseg7_classic_italic)
+                    } catch (_: Exception) {
+                        null
+                    } ?: Typeface.MONOSPACE
+                    textAlign = Paint.Align.RIGHT
+                    letterSpacing = 0.06f
+                    setShadowLayer(w * 0.012f, 0f, 0f, 0xCCFF5A00.toInt())
+                }
+                c.drawText(stampOf(e.date), w - w * 0.045f, bottom - w * 0.035f, sp)
             }
-            val parts = mutableListOf(e.date.replace('-', '.'))
-            if (e.lat != null && e.lon != null) {
-                parts.add(String.format(Locale.US, "%.4f, %.4f", e.lat, e.lon))
-            }
-            c.drawText(parts.joinToString("   ·   "), p, h - p, foot)
-
-            val brand = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFF1B1E24.toInt()
-                textSize = 26f
-                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-                textAlign = Paint.Align.RIGHT
-            }
-            c.drawText("PHOTO-LOG", w - p, h - p, brand)
 
             val dir = File(ctx.cacheDir, "share").apply { mkdirs() }
-            val f = File(dir, "photolog_card_${e.id}.jpg")
-            FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+            val f = File(dir, "photolog_${e.date.replace("-", "")}_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(f).use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
             FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
         } catch (t: Throwable) {
             null
