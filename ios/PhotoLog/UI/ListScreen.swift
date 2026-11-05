@@ -30,6 +30,10 @@ struct RootView: View {
         }
         .task {
             // 처음 실행 시 권한: 위치(카메라 사진 보완용), 사진 보관함(가져온 사진의 촬영 위치·날짜)
+            #if targetEnvironment(simulator)
+            // 스크린샷 자동 촬영(-PLDemo) 중에는 권한 창을 띄우지 않는다
+            if UserDefaults.standard.bool(forKey: "PLDemo") { return }
+            #endif
             await MainActor.run {
                 LocationProvider.shared.requestAccess()
                 PhotoStore.requestLibraryAccess()

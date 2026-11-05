@@ -43,7 +43,7 @@ SUPPORT="$DATA/Library/Application Support"
 mkdir -p "$SUPPORT"
 python3 "$HERE/demo.py" "$OUT/photos" "$SUPPORT"
 
-LANG_ARGS=(-AppleLanguages "(ko)" -AppleLocale ko_KR)
+LANG_ARGS=(-AppleLanguages "(ko)" -AppleLocale ko_KR -PLDemo YES)
 shot() { # 이름, 앱 실행 인자...
   local name=$1; shift
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
