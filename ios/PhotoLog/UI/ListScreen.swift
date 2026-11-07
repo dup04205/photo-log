@@ -52,7 +52,9 @@ struct DemoShare: Identifiable {
 /* ② 시작 화면: 연·월·일 아코디언 + 사진 그리드 */
 struct ListScreen: View {
     @EnvironmentObject var model: AppModel
-    @AppStorage("showIndex") private var showIndex = true
+    // 저장값(@AppStorage)은 바뀔 때 애니메이션이 안 붙는 경우가 있어, 화면 상태(@State)를 따로 두고 움직인다
+    @AppStorage("showIndex") private var savedShowIndex = true
+    @State private var showIndex = UserDefaults.standard.object(forKey: "showIndex") as? Bool ?? true
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var pickerOpen = false
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -69,17 +71,22 @@ struct ListScreen: View {
             }
             ScrollViewReader { proxy in
                 HStack(spacing: 0) {
-                    if showIndex {
-                        HStack(spacing: 0) {
-                            DateIndex(groups: groups) { prefix in
-                                guard let g = groups.first(where: { $0.day.hasPrefix(prefix) }) else { return }
-                                withAnimation { proxy.scrollTo("h-\(g.day)", anchor: .top) }
-                            }
-                            .frame(width: sizeClass == .regular ? 160 : 112)
-                            Rectangle().fill(Palette.outlineVariant).frame(width: 1)
+                    // 사이드바는 항상 화면에 두고 폭을 0 ↔ 원래 폭으로 부드럽게 바꾼다.
+                    // 오른쪽 정렬로 잘라서, 열릴 때는 왼쪽에서 밀려 나오고 닫힐 때는 왼쪽으로 밀려 들어간다.
+                    let sideW: CGFloat = sizeClass == .regular ? 160 : 112
+                    HStack(spacing: 0) {
+                        DateIndex(groups: groups) { prefix in
+                            guard let g = groups.first(where: { $0.day.hasPrefix(prefix) }) else { return }
+                            withAnimation { proxy.scrollTo("h-\(g.day)", anchor: .top) }
                         }
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .frame(width: sideW)
+                        .opacity(showIndex ? 1 : 0)
+                        Rectangle().fill(Palette.outlineVariant).frame(width: 1)
                     }
+                    .frame(width: showIndex ? sideW + 1 : 0, alignment: .trailing)
+                    .clipped()
+                    .allowsHitTesting(showIndex)
+                    .accessibilityHidden(!showIndex)
                     if groups.isEmpty {
                         emptyState
                     } else {
@@ -94,7 +101,8 @@ struct ListScreen: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) { showIndex.toggle() }
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) { showIndex.toggle() }
+                    savedShowIndex = showIndex
                 } label: {
                     Image(systemName: "line.3.horizontal")
                 }
