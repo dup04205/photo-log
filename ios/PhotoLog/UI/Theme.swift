@@ -91,7 +91,7 @@ struct OutlinedButtonStyle: ButtonStyle {
             .padding(.horizontal, 18)
             .frame(minHeight: 42)
             .foregroundColor(Palette.onSurface)
-            .overlay(Capsule().stroke(Palette.outline, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Palette.outline, lineWidth: 1))
             .contentShape(Capsule())
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
@@ -114,7 +114,7 @@ struct Chip: View {
             .frame(height: 32)
             .foregroundColor(enabled ? Palette.onSurface : Palette.onSurfaceVariant.opacity(0.5))
             .background(selected ? Palette.surfaceVariant : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.clear : Palette.outline, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? Color.clear : Palette.outline, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)

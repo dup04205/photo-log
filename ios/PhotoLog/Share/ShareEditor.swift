@@ -34,6 +34,7 @@ struct ShareEditor: View {
     let note: String
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var image: UIImage?
     @State private var ratioIdx = 2 // 기본 4:5
@@ -90,6 +91,7 @@ struct ShareEditor: View {
                         }
                     }
                 }
+                .padding(.vertical, 1)
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -102,6 +104,7 @@ struct ShareEditor: View {
                         }
                     }
                 }
+                .padding(.vertical, 1)
             }
             SwitchRow(
                 title: "기록을 글로 함께 보내기",
@@ -119,6 +122,9 @@ struct ShareEditor: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        // iPad에서는 가운데에 적당한 폭으로
+        .frame(maxWidth: sizeClass == .regular ? 640 : .infinity)
+        .frame(maxWidth: .infinity)
         .background(Palette.background.ignoresSafeArea())
         .task {
             let f = entry.file

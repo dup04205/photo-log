@@ -32,6 +32,11 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIAppFonts:
           - playfair_display_semibold_italic.ttf
           - playfair_display_bold_italic.ttf
@@ -47,9 +52,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.dup04205.photolog
         MARKETING_VERSION: "0.9.3"
         CURRENT_PROJECT_VERSION: "12"
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 82WN266F2F
         ENABLE_PREVIEWS: YES

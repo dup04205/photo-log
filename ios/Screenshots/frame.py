@@ -11,7 +11,6 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 raw, out, fonts = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 out.mkdir(parents=True, exist_ok=True)
-W, H = 1320, 2868
 
 # 파일 이름(번호) → (위 문구, 아래 작은 문구, 다크 여부)
 CAPTIONS = {
@@ -22,8 +21,6 @@ CAPTIONS = {
     "5-dark": ("흑과 백,\n그리고 날짜의 주황", "모든 사진과 기록은 내 폰 안에만", True),
 }
 
-title = ImageFont.truetype(str(fonts / "GowunBatang-Bold.ttf"), 92)
-sub = ImageFont.truetype(str(fonts / "GowunBatang-Regular.ttf"), 46)
 ORANGE = (232, 117, 42)
 
 
@@ -33,45 +30,62 @@ def rounded(img, r):
     return m
 
 
-for p in sorted(raw.glob("*.png")):
+def frame(p, dst):
     key = p.stem
     if key not in CAPTIONS:
-        continue
+        return
     head, small, dark = CAPTIONS[key]
+    shot = Image.open(p).convert("RGB")
+    # 결과물은 원본과 같은 크기(iPhone 1320x2868, iPad 2064x2752 등) — 그대로 App Store에 올릴 수 있다
+    W, H = shot.size
+    k = W / 1320 if W < H * 0.6 else H / 2868 * 1.25  # iPad처럼 넓은 화면은 글자를 조금 키운다
+    title = ImageFont.truetype(str(fonts / "GowunBatang-Bold.ttf"), int(92 * k))
+    sub = ImageFont.truetype(str(fonts / "GowunBatang-Regular.ttf"), int(46 * k))
     bg = (0, 0, 0) if dark else (247, 247, 245)
     fg = (245, 245, 245) if dark else (17, 17, 17)
     subc = (154, 154, 154) if dark else (110, 110, 110)
 
     canvas = Image.new("RGB", (W, H), bg)
     d = ImageDraw.Draw(canvas)
-    y = 190
+    y = int(190 * k)
     for line in head.split("\n"):
         w = d.textlength(line, font=title)
         d.text(((W - w) / 2, y), line, font=title, fill=fg)
-        y += 128
+        y += int(128 * k)
     # 날짜 주황 짧은 선
-    d.rounded_rectangle((W / 2 - 36, y + 18, W / 2 + 36, y + 26), 4, fill=ORANGE)
-    y += 64
+    d.rounded_rectangle((W / 2 - 36 * k, y + 18 * k, W / 2 + 36 * k, y + 26 * k), 4 * k, fill=ORANGE)
+    y += int(64 * k)
     w = d.textlength(small, font=sub)
     d.text(((W - w) / 2, y), small, font=sub, fill=subc)
-    y += 120
+    y += int(120 * k)
 
-    shot = Image.open(p).convert("RGB")
-    scale = (H - y + 140) / shot.height  # 아래로 조금 넘치게 해서 폰 화면이 화면 밖으로 이어지는 느낌
+    scale = (H - y + 140 * k) / shot.height  # 아래로 조금 넘치게 해서 화면이 이어지는 느낌
     sw, sh = int(shot.width * scale), int(shot.height * scale)
     shot = shot.resize((sw, sh), Image.LANCZOS)
     x = (W - sw) // 2
+    r = int(70 * k)
 
     # 그림자 + 테두리
-    shadow = Image.new("L", (sw + 120, sh + 120), 0)
-    ImageDraw.Draw(shadow).rounded_rectangle((60, 60, sw + 60, sh + 60), 70, fill=90 if not dark else 0)
-    shadow = shadow.filter(ImageFilter.GaussianBlur(28))
-    canvas.paste((0, 0, 0), (x - 60, y - 50), shadow)
-    border = Image.new("RGB", (sw + 16, sh + 16), (40, 40, 40) if dark else (17, 17, 17))
-    canvas.paste(border, (x - 8, y - 8), rounded(border, 78))
-    canvas.paste(shot, (x, y), rounded(shot, 70))
-    canvas.save(out / f"{key}.png")
-    print("만듦:", out / f"{key}.png")
+    pad = int(60 * k)
+    shadow = Image.new("L", (sw + 2 * pad, sh + 2 * pad), 0)
+    ImageDraw.Draw(shadow).rounded_rectangle((pad, pad, sw + pad, sh + pad), r, fill=90 if not dark else 0)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(28 * k))
+    canvas.paste((0, 0, 0), (x - pad, y - int(50 * k)), shadow)
+    b = max(6, int(8 * k))
+    border = Image.new("RGB", (sw + 2 * b, sh + 2 * b), (40, 40, 40) if dark else (17, 17, 17))
+    canvas.paste(border, (x - b, y - b), rounded(border, r + b))
+    canvas.paste(shot, (x, y), rounded(shot, r))
+    dst.mkdir(parents=True, exist_ok=True)
+    canvas.save(dst / f"{key}.png")
+    print("만듦:", dst / f"{key}.png")
+
+
+# raw/ 바로 아래 또는 raw/<기기>/ 아래의 스크린샷을 같은 구조로 framed/에 만든다
+for p in sorted(raw.glob("*.png")):
+    frame(p, out)
+for sub_dir in sorted(x for x in raw.iterdir() if x.is_dir()):
+    for p in sorted(sub_dir.glob("*.png")):
+        frame(p, out / sub_dir.name)
 
 # 예시 사진 후보 미리보기
 if len(sys.argv) > 4:

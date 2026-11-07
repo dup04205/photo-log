@@ -110,7 +110,7 @@ Permissions:
 ## 10. 스크린샷
 
 - 필수 크기: iPhone 6.9형 1320 × 2868 (세로). 3~10장. 이 크기를 올리면 작은 화면용은 자동으로 줄여 쓴다.
-- iPad는 앱이 iPhone 전용이라 필요 없다.
+- iPad: 앱이 iPad도 지원하므로 iPad 13형 2064 × 2752 스크린샷도 필요하다(3~10장). 같은 워크플로가 iPad Pro 13형 시뮬레이터로 함께 찍는다.
 - 실제 앱 화면이어야 한다(꾸민 목업만 올리면 거절될 수 있다). 위에 짧은 문구를 얹는 것은 괜찮다.
 
 | 순서 | 화면 | 위 문구 |
@@ -122,7 +122,7 @@ Permissions:
 | 5 | 다크 모드 그리드 | 흑과 백, 그리고 날짜의 주황 |
 
 찍는 방법: GitHub Actions의 "iOS Screenshots" 워크플로가 iPhone 16 Pro Max(6.9형) 시뮬레이터에 예시 사진·기록을 넣고 위 5장을 자동으로 찍는다.
-- 결과는 `screenshots` 브랜치에 올라간다. `raw/`는 앱 화면 그대로(1320×2868), `framed/`는 위 문구를 얹은 버전(같은 크기). 둘 중 하나를 골라 올리면 된다.
+- 결과는 `screenshots` 브랜치에 올라간다. `raw/iphone`, `raw/ipad`는 앱 화면 그대로, `framed/iphone`, `framed/ipad`는 위 문구를 얹은 버전(같은 크기). 둘 중 하나를 골라 올리면 된다.
 - 예시 사진은 Lorem Picsum(Unsplash 라이선스, 상업적 사용 가능)에서 받는다. 바꾸려면 `ios/Screenshots/photos.txt`의 번호를, 기록·날짜·장소는 `ios/Screenshots/demo.py`를, 문구는 `ios/Screenshots/frame.py`를 고친다.
 - 실행 옵션(-PLOpen, -PLShare 등)은 시뮬레이터에서만 동작하고 실제 기기 앱에는 영향이 없다.
 

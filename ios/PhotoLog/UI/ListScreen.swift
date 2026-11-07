@@ -53,6 +53,7 @@ struct DemoShare: Identifiable {
 struct ListScreen: View {
     @EnvironmentObject var model: AppModel
     @AppStorage("showIndex") private var showIndex = true
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var pickerOpen = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var cameraOpen = false
@@ -74,7 +75,7 @@ struct ListScreen: View {
                                 guard let g = groups.first(where: { $0.day.hasPrefix(prefix) }) else { return }
                                 withAnimation { proxy.scrollTo("h-\(g.day)", anchor: .top) }
                             }
-                            .frame(width: 112)
+                            .frame(width: sizeClass == .regular ? 160 : 112)
                             Rectangle().fill(Palette.outlineVariant).frame(width: 1)
                         }
                         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -148,7 +149,10 @@ struct ListScreen: View {
     }
 
     private func grid(_ groups: [DayGroup]) -> some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: showIndex ? 3 : 4)
+        // iPhone: 3열(사이드바 숨기면 4열) / iPad: 화면 폭에 맞춰 한 칸 약 150pt로 자동
+        let columns = sizeClass == .regular
+            ? [GridItem(.adaptive(minimum: 150), spacing: 6)]
+            : Array(repeating: GridItem(.flexible(), spacing: 4), count: showIndex ? 3 : 4)
         return ScrollView {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
                 ForEach(groups) { g in

@@ -23,6 +23,7 @@ private struct DetailContent: View {
     @State private var deleteFor: LogEntry?
     @State private var shareTarget: ShareTarget?
     @FocusState private var noteFocused: Bool
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     init(entry: LogEntry) {
         self.entry = entry
@@ -60,6 +61,9 @@ private struct DetailContent: View {
                     .id("buttons")
                 }
                 .padding(16)
+                // iPad에서는 읽기 좋은 폭으로 가운데 정렬
+                .frame(maxWidth: sizeClass == .regular ? 680 : .infinity)
+                .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: noteFocused) { focused in
@@ -112,7 +116,7 @@ private struct DetailContent: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 460)
+                    .frame(maxWidth: .infinity, maxHeight: sizeClass == .regular ? 620 : 460)
             } else {
                 Color.black.frame(height: 300).overlay(ProgressView().tint(.white))
             }
@@ -151,7 +155,7 @@ private struct DetailContent: View {
             .padding(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(noteFocused ? Palette.onSurface : Palette.outline, lineWidth: noteFocused ? 2 : 1)
+                    .strokeBorder(noteFocused ? Palette.onSurface : Palette.outline, lineWidth: noteFocused ? 2 : 1)
             )
             Text("\(lines) / \(ShareImage.maxNoteLines)줄")
                 .font(.system(size: 12))
