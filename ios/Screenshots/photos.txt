@@ -1,0 +1,20 @@
+# 스크린샷용 예시 사진. Lorem Picsum(https://picsum.photos)의 Unsplash 사진, Unsplash 라이선스(상업적 사용 가능).
+# 이름  picsum-id
+cafe 1060
+street 1067
+dessert 1080
+autumn 1047
+park 1011
+dog 1025
+river 1015
+night 1029
+book 24
+sea 1050
+coast 1044
+mountain 1018
+forest 1039
+flowers 106
+breakfast 292
+tea 225
+lake 1036
+trail 17
