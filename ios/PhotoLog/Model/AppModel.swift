@@ -77,23 +77,47 @@ final class AppModel: ObservableObject {
                 if let r = r { ok.append(r) }
             }
             busy = false
-            if ok.count == 1 && items.count == 1 {
-                addEntry(file: ok[0].0, info: ok[0].1, open: true)
-                return
-            }
-            ok.forEach { addEntry(file: $0.0, info: $0.1, open: false) }
-            let failed = items.count - ok.count
-            let withPlace = ok.filter { $0.1.lat != nil }.count
-            let msg: String
-            if ok.isEmpty {
-                msg = "사진을 가져오지 못했습니다"
-            } else if failed > 0 {
-                msg = "\(ok.count)장을 가져왔습니다 (위치 \(withPlace)장, 실패 \(failed)장)"
-            } else {
-                msg = "\(ok.count)장을 가져왔습니다 (위치 정보 \(withPlace)장)"
-            }
-            show(msg, long: true)
+            finishImport(ok, total: items.count)
         }
+    }
+
+    /// 파일(Finder·파일 앱)에서 고른 사진을 가져온다. 맥에서 주로 쓴다.
+    func importFiles(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        busy = true
+        Task {
+            var ok: [(String, PhotoInfo)] = []
+            for u in urls {
+                let r: (String, PhotoInfo)? = await runInBackground {
+                    let scoped = u.startAccessingSecurityScopedResource()
+                    defer { if scoped { u.stopAccessingSecurityScopedResource() } }
+                    guard let data = try? Data(contentsOf: u) else { return nil }
+                    return PhotoStore.importData(data, assetDate: nil, assetLocation: nil)
+                }
+                if let r = r { ok.append(r) }
+            }
+            busy = false
+            finishImport(ok, total: urls.count)
+        }
+    }
+
+    private func finishImport(_ ok: [(String, PhotoInfo)], total: Int) {
+        if ok.count == 1 && total == 1 {
+            addEntry(file: ok[0].0, info: ok[0].1, open: true)
+            return
+        }
+        ok.forEach { addEntry(file: $0.0, info: $0.1, open: false) }
+        let failed = total - ok.count
+        let withPlace = ok.filter { $0.1.lat != nil }.count
+        let msg: String
+        if ok.isEmpty {
+            msg = "사진을 가져오지 못했습니다"
+        } else if failed > 0 {
+            msg = "\(ok.count)장을 가져왔습니다 (위치 \(withPlace)장, 실패 \(failed)장)"
+        } else {
+            msg = "\(ok.count)장을 가져왔습니다 (위치 정보 \(withPlace)장)"
+        }
+        show(msg, long: true)
     }
 
     /// 카메라 촬영 결과를 저장한다.

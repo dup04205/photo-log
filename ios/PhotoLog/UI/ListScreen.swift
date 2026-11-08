@@ -18,6 +18,12 @@ struct RootView: View {
                 .environmentObject(model)
         }
         .onAppear {
+            #if targetEnvironment(macCatalyst)
+            // 맥: 창을 너무 작게 줄이지 못하게
+            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                scene.sizeRestrictions?.minimumSize = CGSize(width: 720, height: 600)
+            }
+            #endif
             #if targetEnvironment(simulator)
             // 스크린샷 자동 촬영용(시뮬레이터 전용): -PLShare <id> -PLShareStyle card|overlay|photo -PLShareRatio 0~3
             let d = UserDefaults.standard
@@ -42,6 +48,10 @@ struct RootView: View {
     }
 }
 
+enum ImportKind {
+    case backup, photos
+}
+
 struct DemoShare: Identifiable {
     let entry: LogEntry
     let ratio: Int
@@ -60,6 +70,7 @@ struct ListScreen: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var cameraOpen = false
     @State private var importerOpen = false
+    @State private var importKind: ImportKind = .backup
     @State private var shareTarget: ShareTarget?
     @State private var deleteFor: LogEntry?
 
@@ -112,7 +123,10 @@ struct ListScreen: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button("백업 내보내기") { model.exportBackup() }
-                    Button("백업 불러오기") { importerOpen = true }
+                    Button("백업 불러오기") {
+                        importKind = .backup
+                        importerOpen = true
+                    }
                 } label: {
                     Image(systemName: "ellipsis").rotationEffect(.degrees(90))
                 }
@@ -134,13 +148,28 @@ struct ListScreen: View {
             pickerItems = []
         }
         .fullScreenCover(isPresented: $cameraOpen) {
+            #if targetEnvironment(macCatalyst)
+            MacCameraView(isPresented: $cameraOpen) { img, meta in
+                model.capture(image: img, metadata: meta)
+            }
+            #else
             CameraPicker(isPresented: $cameraOpen) { img, meta in
                 model.capture(image: img, metadata: meta)
             }
             .ignoresSafeArea()
+            #endif
         }
-        .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.zip]) { result in
-            if case .success(let url) = result { model.importBackup(url) }
+        .fileImporter(
+            isPresented: $importerOpen,
+            allowedContentTypes: importKind == .photos ? [.image] : [.zip],
+            allowsMultipleSelection: importKind == .photos
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            if importKind == .photos {
+                model.importFiles(urls)
+            } else if let url = urls.first {
+                model.importBackup(url)
+            }
         }
         .modifier(ShareFlow(target: $shareTarget))
         .deleteAlert($deleteFor) { model.delete($0) }
@@ -203,6 +232,14 @@ struct ListScreen: View {
             } label: {
                 Label("앨범에서 가져오기", systemImage: "photo.on.rectangle")
             }
+            #if targetEnvironment(macCatalyst)
+            Button {
+                importKind = .photos
+                importerOpen = true
+            } label: {
+                Label("파일에서 가져오기", systemImage: "folder")
+            }
+            #endif
         } label: {
             Label("사진 추가", systemImage: "plus")
                 .font(.system(size: 16, weight: .semibold))
@@ -217,7 +254,12 @@ struct ListScreen: View {
     }
 
     private func openCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+        #if targetEnvironment(macCatalyst)
+        let canShoot = CameraController.available
+        #else
+        let canShoot = UIImagePickerController.isSourceTypeAvailable(.camera)
+        #endif
+        guard canShoot else {
             model.show("카메라를 사용할 수 없습니다")
             return
         }

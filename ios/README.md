@@ -1,4 +1,4 @@
-# PHOTO-LOG for iOS
+# PHOTO-LOG for iOS · iPadOS · macOS
 
 안드로이드판 v0.9.3과 같은 기능의 iPhone 앱. SwiftUI, iOS 16 이상. 서버 없이 모든 데이터가 폰 안에 저장된다.
 
@@ -18,6 +18,15 @@
 - Google 포토에서 바로 가져오기는 없다. iOS는 다른 앱이 Google 포토 사진을 고르는 기능을 열어 두지 않는다. Google 포토 앱에서 사진을 "기기에 저장"한 뒤 앨범에서 가져오면 된다.
 - 지도에서 보기: Apple 지도 · 카카오맵 · Google 지도 중에서 고른다.
 - 백업 내보내기는 파일 앱 저장 화면으로 열린다(iCloud Drive, Google 드라이브 등 선택).
+
+## 맥북 앱 (Mac Catalyst)
+같은 코드로 맥북용 앱도 만든다. iPad 화면 배치를 쓰고, 창 크기를 자유롭게 바꿀 수 있다(최소 720×600).
+- 카메라로 찍기: 맥북 내장 카메라(또는 연결된 카메라)로 찍는다. 스페이스바로도 찍을 수 있다. 촬영 위치는 맥의 위치 서비스로 기록한다.
+- 사진 추가 메뉴에 "파일에서 가져오기"가 더 있다(Finder의 사진 여러 장).
+- 데이터 위치: `~/Library/Application Support/com.dup04205.photolog/`(사진 앱에는 보이지 않는다). 백업 zip은 iPhone·Android와 같은 형식이다.
+- 빌드: `ios/` 가 바뀌면 GitHub Actions(`.github/workflows/mac.yml`)가 로컬 서명한 `PHOTO-LOG-mac.zip`을 `mac` 브랜치에 올린다. 압축을 풀어 `PHOTO-LOG.app`을 응용 프로그램 폴더로 옮기면 된다.
+  인터넷에서 받은 경우 처음 한 번은 앱을 Control-클릭 → 열기로 실행한다.
+- Xcode에서 직접 실행하려면 실행 대상에서 "My Mac (Mac Catalyst)"을 고르고 ▶를 누른다.
 
 ## 빌드
 `ios/` 폴더가 바뀐 커밋이 main에 올라가면 GitHub Actions(`.github/workflows/ios.yml`)가 macOS에서 서명 없는 `PHOTO-LOG.ipa`를 만든다.

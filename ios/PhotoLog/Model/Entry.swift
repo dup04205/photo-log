@@ -52,7 +52,11 @@ struct DayGroup: Identifiable {
 enum Paths {
     static let root: URL = {
         let fm = FileManager.default
-        let u = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        var u = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #if targetEnvironment(macCatalyst)
+        // 맥에서는 Application Support가 모든 앱이 함께 쓰는 폴더라, 앱 전용 하위 폴더에 둔다
+        u = u.appendingPathComponent("com.dup04205.photolog", isDirectory: true)
+        #endif
         try? fm.createDirectory(at: u, withIntermediateDirectories: true)
         return u
     }()

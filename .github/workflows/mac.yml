@@ -1,0 +1,62 @@
+name: Build Mac
+
+# ios/ 폴더가 바뀌면 맥북용 앱(Mac Catalyst)을 빌드해 mac 브랜치에 PHOTO-LOG-mac.zip 으로 올린다.
+# 개발자 인증서 없이 로컬 서명(ad-hoc)만 한다 — 본인 맥에서 쓰는 용도.
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/mac.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Build Mac app
+        run: |
+          cd ios
+          if ! xcodebuild \
+              -project PhotoLog.xcodeproj -scheme PhotoLog -configuration Release \
+              -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+              -derivedDataPath build-mac \
+              CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" PROVISIONING_PROFILE_SPECIFIER="" \
+              build > build-mac.log 2>&1; then
+            echo "::error::빌드 실패: $(grep -E 'error:' build-mac.log | head -20 | tr '\n' ' ' | cut -c1-1500)"
+            grep -E 'error:' build-mac.log | head -60
+            tail -40 build-mac.log
+            exit 1
+          fi
+          grep -c 'warning:' build-mac.log | xargs -I{} echo "경고 {}개"
+          APP=build-mac/Build/Products/Release-maccatalyst/PhotoLog.app
+          codesign -dv "$APP" 2>&1 | head -5
+          lipo -archs "$APP/Contents/MacOS/PhotoLog"
+          rm -rf ../dist && mkdir ../dist
+          cp -R "$APP" "../dist/PHOTO-LOG.app"
+          cd ../dist && ditto -c -k --sequesterRsrc --keepParent PHOTO-LOG.app PHOTO-LOG-mac.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: photo-log-mac
+          path: dist/PHOTO-LOG-mac.zip
+
+      - name: Publish to mac branch
+        run: |
+          mkdir pub && cp dist/PHOTO-LOG-mac.zip pub/
+          cd pub
+          git init -q -b mac
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          echo "build ${{ github.run_number }} · ${{ github.sha }}" > BUILD.txt
+          git add -A
+          git commit -qm "Mac build ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" mac
