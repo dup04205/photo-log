@@ -29,7 +29,11 @@ final class CameraController: NSObject, ObservableObject, AVCapturePhotoCaptureD
         }
     }
 
-    private static let deniedMessage = "카메라 권한이 없습니다.\n시스템 설정 → 개인정보 보호 및 보안 → 카메라에서 PHOTO-LOG를 허용해 주세요."
+    private static let deniedMessage = "카메라 권한이 없습니다.\n시스템 설정 → 개인정보 보호 및 보안 → 카메라에서 PHOTO-LOG를 켜 주세요."
+    var denied: Bool {
+        let s = AVCaptureDevice.authorizationStatus(for: .video)
+        return s == .denied || s == .restricted
+    }
 
     private func configure() {
         queue.async {
@@ -112,12 +116,26 @@ struct MacCameraView: View {
             Color.white.opacity(flash ? 0.8 : 0).ignoresSafeArea().allowsHitTesting(false)
 
             if let f = cam.failed {
-                Text(f)
-                    .font(.system(size: 15))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(6)
-                    .padding(24)
+                VStack(spacing: 18) {
+                    Text(f)
+                        .font(.system(size: 15))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(6)
+                    if cam.denied {
+                        Button("시스템 설정 열기") {
+                            if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+                                UIApplication.shared.open(u)
+                            }
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(Color.white, in: Capsule())
+                    }
+                }
+                .padding(24)
             } else if !cam.ready {
                 ProgressView().tint(.white)
             }
