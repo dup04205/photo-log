@@ -148,16 +148,9 @@ struct ListScreen: View {
             pickerItems = []
         }
         .fullScreenCover(isPresented: $cameraOpen) {
-            #if targetEnvironment(macCatalyst)
-            MacCameraView(isPresented: $cameraOpen) { img, meta in
+            CameraView(isPresented: $cameraOpen) { img, meta in
                 model.capture(image: img, metadata: meta)
             }
-            #else
-            CameraPicker(isPresented: $cameraOpen) { img, meta in
-                model.capture(image: img, metadata: meta)
-            }
-            .ignoresSafeArea()
-            #endif
         }
         .fileImporter(
             isPresented: $importerOpen,
@@ -254,11 +247,7 @@ struct ListScreen: View {
     }
 
     private func openCamera() {
-        #if targetEnvironment(macCatalyst)
         let canShoot = CameraController.available
-        #else
-        let canShoot = UIImagePickerController.isSourceTypeAvailable(.camera)
-        #endif
         guard canShoot else {
             model.show("카메라를 사용할 수 없습니다")
             return

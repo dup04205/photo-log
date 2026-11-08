@@ -51,44 +51,6 @@ final class ExportPresenter: NSObject, UIDocumentPickerDelegate {
     }
 }
 
-/// 카메라로 찍기
-struct CameraPicker: UIViewControllerRepresentable {
-    @Binding var isPresented: Bool
-    let onCapture: (UIImage, [String: Any]) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let p = UIImagePickerController()
-        p.sourceType = .camera
-        p.cameraCaptureMode = .photo
-        p.delegate = context.coordinator
-        return p
-    }
-
-    func updateUIViewController(_ vc: UIImagePickerController, context: Context) {}
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraPicker
-
-        init(_ parent: CameraPicker) { self.parent = parent }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            if let img = info[.originalImage] as? UIImage {
-                parent.onCapture(img, info[.mediaMetadata] as? [String: Any] ?? [:])
-            }
-            parent.isPresented = false
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.isPresented = false
-        }
-    }
-}
-
 struct MapLink: Identifiable {
     let name: String
     let url: URL
