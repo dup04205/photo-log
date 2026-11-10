@@ -47,7 +47,8 @@
 버전별 변경 내용과 각 시점의 코드는 [CHANGELOG.md](CHANGELOG.md)에 있다.
 
 ## 라이선스
-- 앱에 포함된 글꼴은 모두 SIL Open Font License 1.1을 따른다. 라이선스 전문은 `licenses/` 폴더에 있다.
+- 코드는 MIT 라이선스를 따른다. 전문은 [LICENSE](LICENSE)에 있다.
+- 앱에 포함된 글꼴은 MIT가 아니라 모두 모두 SIL Open Font License 1.1을 따른다. 라이선스 전문은 `licenses/` 폴더에 있다.
   - Playfair Display — `licenses/OFL-PlayfairDisplay.txt`
   - Gowun Batang(고운바탕) — `licenses/OFL-GowunBatang.txt`
   - DSEG7 Classic — `licenses/OFL-DSEG.txt`
